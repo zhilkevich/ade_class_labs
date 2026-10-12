@@ -64,7 +64,7 @@ FROM
            METADATA$START_SCAN_TIME
     FROM @EVENTS_STAGE/batch1/
 )
-FILE_FORMAT = (FORMAT_NAME = 'EVENTS_JSON');
+FILE_FORMAT = EVENTS_JSON;
 
 SELECT COUNT(*) AS raw_rows
 FROM EVENTS_RAW; -- 4 on the first pass; 8 if batch2 was already loaded
@@ -94,7 +94,7 @@ FROM
            METADATA$START_SCAN_TIME
     FROM @ADV_ORDERS.BRONZE.EVENTS_STAGE/batch2/
 )
-FILE_FORMAT = (FORMAT_NAME = 'ADV_ORDERS.BRONZE.EVENTS_JSON')
+FILE_FORMAT = ADV_ORDERS.BRONZE.EVENTS_JSON
 ON_ERROR = SKIP_FILE;
 -- This is a bounded recovery/backfill exercise, NOT continuous scheduling.
 -- REFRESH queues recently staged files (7-day limit); ingestion is asynchronous.
