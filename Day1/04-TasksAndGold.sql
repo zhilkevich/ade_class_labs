@@ -67,6 +67,19 @@ FILE_FORMAT = (TYPE = JSON COMPRESSION = GZIP)
 SINGLE = TRUE
 OVERWRITE = FALSE;
 
+-- The pipe was created with AUTO_INGEST = FALSE. This lab has no automatic
+-- file-arrival notification configured, so writing a file to the stage does not
+-- by itself request its loading through this pipe.
+-- REFRESH manually discovers eligible files and submits them to Snowpipe's
+-- ingestion queue: Snowpipe loads them asynchronously after this command returns.
+-- It is a manual loading trigger, not a cloud file-arrival notification.
+-- The pipe already reads @BRONZE.EVENTS_STAGE/batch2/.
+-- PREFIX = 'update' restricts discovery to names beginning with 'update' under
+-- that path, including the update.json.gz file we just created.
+-- REFRESH checks load history; it is not a FORCE reload of an already loaded file.
+-- This bounded classroom trigger is not a production polling design.
+-- Source: https://docs.snowflake.com/en/sql-reference/sql/alter-pipe
+
 ALTER PIPE BRONZE.ORDERS_PIPE REFRESH PREFIX = 'update';
 
 -- As in lab 02, REFRESH is used only as a bounded lab recovery trigger.
