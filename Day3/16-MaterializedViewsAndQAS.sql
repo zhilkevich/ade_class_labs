@@ -6,6 +6,8 @@ C11 part 2 — Repeated aggregates and eligibility-driven acceleration
 3) Evaluate Query Acceleration eligibility before enabling a service
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 16 - Materialized aggregates and QAS estimate.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;

@@ -6,6 +6,8 @@ C11 part 1 — Pruning, physical order and optional search optimization
 3) Evaluate search optimization for a selective lookup
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 15 - Physical ordering comparison.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;

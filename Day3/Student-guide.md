@@ -1,5 +1,7 @@
 # Day 3 — Evidence-based tuning and recovery
 
+Open [Pipeline progression](Pipeline-progression.md) alongside the scripts to follow the objects and connections added by each lab.
+
 Use the same account and original order project. Performance data lives in PERF. The instructor executes each numbered step and students repeat the same step. Do not promise a speedup: your profile determines the conclusion.
 
 ## Execute in order

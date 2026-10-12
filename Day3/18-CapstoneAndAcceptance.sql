@@ -6,6 +6,8 @@ Course capstone — defend a complete operational design
 3) Explain governance, freshness and recovery tradeoffs
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 18 - Capstone and shutdown.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;

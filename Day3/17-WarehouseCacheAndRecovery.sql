@@ -6,6 +6,8 @@ C11 operations — Cache, sizing, concurrency and recovery
 3) Recover a training object and explain the limits of local recovery
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 17 - Cache, compute and local recovery.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
@@ -14,6 +16,11 @@ USE SCHEMA OPS;
 ALTER SESSION SET TIMEZONE = 'UTC';
 
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY3';
+
+-- SETUP: prepare the disposable recovery target before the experiments.
+-- The clone starts with the baseline data; later DROP/UNDROP tests this copy only.
+
+CREATE TABLE PERF.RECOVERY_COPY CLONE PERF.ORDERS_BASE;
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 1 │ Control persisted-result reuse explicitly
@@ -101,8 +108,6 @@ USE WAREHOUSE ADV_WH;
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 4 │ Recover a disposable table without touching the business pipeline
 -- ──────────────────────────────────────────────────────────────────────────────
-
-CREATE TABLE PERF.RECOVERY_COPY CLONE PERF.ORDERS_BASE;
 
 SELECT COUNT(*) FROM PERF.RECOVERY_COPY; -- 1000000
 

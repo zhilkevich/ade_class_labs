@@ -6,6 +6,8 @@ C10 setup — deterministic scale without external data
 3) Record exact scale and configuration before measurement
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 13 - Independent performance sandbox.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;

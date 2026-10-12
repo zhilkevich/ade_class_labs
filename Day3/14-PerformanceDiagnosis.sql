@@ -6,6 +6,8 @@ C10 — Diagnose before choosing an optimization
 3) Choose a hypothesis based on selectivity and physical work
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 14 - Measure before tuning.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
