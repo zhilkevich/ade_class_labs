@@ -9,11 +9,8 @@
 -- 02 | Internal stage -> Bronze, replay, Snowpipe
 
 USE ROLE ADV_LAB;
-
 USE WAREHOUSE ADV_WH;
-
 USE DATABASE ADV_ORDERS;
-
 USE SCHEMA BRONZE;
 
 -- ──────────────────────────────────────────────────────────────────────────────
