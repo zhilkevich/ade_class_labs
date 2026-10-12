@@ -12,6 +12,7 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY3';
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -19,9 +20,13 @@ ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY3';
 -- ──────────────────────────────────────────────────────────────────────────────
 
 ALTER SESSION SET USE_CACHED_RESULT = TRUE;
+
 SELECT SUM(AMOUNT) AS TOTAL_AMOUNT FROM PERF.ORDERS_BASE;
+
 SET CACHE_FIRST_ID = LAST_QUERY_ID();
+
 SELECT SUM(AMOUNT) AS TOTAL_AMOUNT FROM PERF.ORDERS_BASE;
+
 SET CACHE_REPEAT_ID = LAST_QUERY_ID();
 
 INSERT INTO PERF.MEASUREMENTS VALUES
@@ -29,8 +34,10 @@ INSERT INTO PERF.MEASUREMENTS VALUES
     ('CACHE_REPEAT', $CACHE_REPEAT_ID, CURRENT_TIMESTAMP());
 
 ALTER SESSION SET USE_CACHED_RESULT = FALSE;
+
 -- Inspect profile/history; matching text is only one of the reuse conditions.
 -- Warehouse-local data cache is separate and can still influence this next query.
+
 SELECT SUM(AMOUNT) AS TOTAL_AMOUNT FROM PERF.ORDERS_BASE;
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -38,21 +45,25 @@ SELECT SUM(AMOUNT) AS TOTAL_AMOUNT FROM PERF.ORDERS_BASE;
 -- ──────────────────────────────────────────────────────────────────────────────
 
 USE ROLE ACCOUNTADMIN;
+
 CREATE WAREHOUSE ADV_TUNE_WH
     WAREHOUSE_SIZE = 'XSMALL'
     ENABLE_QUERY_ACCELERATION = FALSE
     AUTO_SUSPEND = 60
     AUTO_RESUME = TRUE
     INITIALLY_SUSPENDED = TRUE;
+
 GRANT USAGE, OPERATE, MODIFY ON WAREHOUSE ADV_TUNE_WH TO ROLE ADV_LAB;
 
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_TUNE_WH;
+
 ALTER SESSION SET USE_CACHED_RESULT = FALSE;
 
 SELECT C.REGION, SUM(O.AMOUNT)
 FROM PERF.ORDERS_BASE O JOIN PERF.CUSTOMERS C ON O.CUSTOMER_ID = C.CUSTOMER_ID
 GROUP BY C.REGION;
+
 SET XS_QUERY_ID = LAST_QUERY_ID();
 
 ALTER WAREHOUSE ADV_TUNE_WH SET WAREHOUSE_SIZE = 'SMALL';
@@ -60,6 +71,7 @@ ALTER WAREHOUSE ADV_TUNE_WH SET WAREHOUSE_SIZE = 'SMALL';
 SELECT C.REGION, SUM(O.AMOUNT)
 FROM PERF.ORDERS_BASE O JOIN PERF.CUSTOMERS C ON O.CUSTOMER_ID = C.CUSTOMER_ID
 GROUP BY C.REGION;
+
 SET SMALL_QUERY_ID = LAST_QUERY_ID();
 
 INSERT INTO PERF.MEASUREMENTS VALUES
@@ -67,8 +79,11 @@ INSERT INTO PERF.MEASUREMENTS VALUES
     ('SIZE_SMALL', $SMALL_QUERY_ID, CURRENT_TIMESTAMP());
 
 ALTER WAREHOUSE ADV_TUNE_WH SET WAREHOUSE_SIZE = 'XSMALL';
+
 ALTER WAREHOUSE ADV_TUNE_WH SUSPEND;
+
 USE WAREHOUSE ADV_WH;
+
 -- Repeat with controlled warm/cold conditions. Runtime plus credit rate determines
 -- cost per completed workload; a larger warehouse is not automatically cheaper.
 
@@ -88,12 +103,15 @@ USE WAREHOUSE ADV_WH;
 -- ──────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE PERF.RECOVERY_COPY CLONE PERF.ORDERS_BASE;
+
 SELECT COUNT(*) FROM PERF.RECOVERY_COPY; -- 1000000
 
 DROP TABLE PERF.RECOVERY_COPY;
+
 UNDROP TABLE PERF.RECOVERY_COPY;
 
 SELECT COUNT(*) FROM PERF.RECOVERY_COPY; -- 1000000 restored
+
 -- Clone and Time Travel are local recovery tools. They do not prove another
 -- region/account is ready, nor replace tested replication, RPO/RTO and failover.
 -- Optional practice: recover a controlled UPDATE with a recorded statement ID.

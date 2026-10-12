@@ -12,6 +12,7 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY3';
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -21,6 +22,7 @@ ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY3';
 -- Native SQL generator avoids sample-database availability and local Python.
 -- One million rows is a rehearsal starting point, not a guaranteed stress test.
 -- Increase scale only after the instructor validates class timing and cost.
+
 CREATE SCHEMA PERF;
 
 CREATE TABLE PERF.ORDERS_BASE AS
@@ -60,17 +62,22 @@ CREATE TABLE PERF.MEASUREMENTS
 SELECT COUNT(*) AS ROW_COUNT, COUNT(DISTINCT ORDER_ID) AS UNIQUE_ORDERS,
        MIN(ORDER_ID) AS FIRST_ORDER, MAX(ORDER_ID) AS LAST_ORDER
 FROM PERF.ORDERS_BASE;
+
 -- CHECKPOINT: 1000000 rows/unique; IDs 1 through 1000000.
 
 SELECT COUNT(*) AS CUSTOMERS FROM PERF.CUSTOMERS; -- 100000
+
 SELECT COUNT(*) AS CUSTOMER_42_ORDERS FROM PERF.ORDERS_BASE WHERE CUSTOMER_ID = 42; -- 10
 
 SELECT COUNT(*) AS CURRENT_ORDERS,
        SUM(IFF(STATUS <> 'CANCELLED', AMOUNT, 0)) AS ACTIVE_AMOUNT_USD
 FROM SILVER.ORDERS_CURRENT;
+
 -- CHECKPOINT course business state: 3 orders / 165.
 
 SHOW WAREHOUSES LIKE 'ADV_WH';
+
 ALTER SESSION SET USE_CACHED_RESULT = FALSE;
+
 -- A small or cache-resident dataset may show negligible differences. Report
 -- measured partition/byte counts and runtime rather than inventing a speedup.

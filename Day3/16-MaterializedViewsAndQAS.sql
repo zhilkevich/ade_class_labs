@@ -12,6 +12,7 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY3';
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -19,6 +20,7 @@ ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY3';
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- Enterprise feature; direct table source and supported aggregate functions.
+
 CREATE MATERIALIZED VIEW PERF.DAILY_ORDER_MV AS
 SELECT ORDER_DATE, STATUS, COUNT(*) AS ORDER_COUNT, SUM(AMOUNT) AS TOTAL_AMOUNT
 FROM PERF.ORDERS_BASE
@@ -27,8 +29,11 @@ GROUP BY ORDER_DATE, STATUS;
 SELECT SUM(ORDER_COUNT) AS ORDER_COUNT, SUM(TOTAL_AMOUNT) AS ORDER_AMOUNT
 FROM PERF.DAILY_ORDER_MV
 WHERE ORDER_DATE BETWEEN '2024-06-01'::DATE AND '2024-06-07'::DATE;
+
 SET MV_QUERY_ID = LAST_QUERY_ID();
+
 INSERT INTO PERF.MEASUREMENTS VALUES ('DATE_MV_DIRECT', $MV_QUERY_ID, CURRENT_TIMESTAMP());
+
 -- CHECKPOINT: same count/amount as DATE_BASELINE.
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -40,13 +45,16 @@ ALTER SESSION SET USE_CACHED_RESULT = FALSE;
 SELECT COUNT(*) AS ORDER_COUNT, SUM(AMOUNT) AS ORDER_AMOUNT
 FROM PERF.ORDERS_BASE
 WHERE ORDER_DATE BETWEEN '2024-06-01'::DATE AND '2024-06-07'::DATE;
+
 SET REWRITE_QUERY_ID = LAST_QUERY_ID();
+
 INSERT INTO PERF.MEASUREMENTS VALUES ('DATE_AFTER_MV', $REWRITE_QUERY_ID, CURRENT_TIMESTAMP());
 
 EXPLAIN USING TEXT
 SELECT COUNT(*), SUM(AMOUNT)
 FROM PERF.ORDERS_BASE
 WHERE ORDER_DATE BETWEEN '2024-06-01'::DATE AND '2024-06-07'::DATE;
+
 -- Inspect the scan target. Optimizer rewrite is chosen by Snowflake, not promised.
 -- Materialized maintenance and storage consume resources beyond the SELECT.
 
@@ -59,6 +67,7 @@ SET QAS_CANDIDATE = (
     WHERE CASE_NAME = 'DATE_BASELINE' ORDER BY RECORDED_AT DESC LIMIT 1);
 
 SELECT PARSE_JSON(SYSTEM$ESTIMATE_QUERY_ACCELERATION($QAS_CANDIDATE)) AS ESTIMATE;
+
 -- Ineligible is a valid observation, especially at this scale.
 -- The estimate is not a measured speedup. Enable only the separately rehearsed branch.
 
