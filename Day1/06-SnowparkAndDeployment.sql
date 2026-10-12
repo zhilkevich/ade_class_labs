@@ -13,7 +13,15 @@ USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
+-- Use a common session time zone for classroom checks and LTZ history display.
+-- This is session setup, not a conversion of stored event timestamps.
+-- Fixture event_time strings already contain Z (UTC), so their TIMESTAMP_TZ
+-- interpretation does not depend on this setting. Timestamps without an offset
+-- would use the session zone when converted to TIMESTAMP_TZ.
+
 ALTER SESSION SET TIMEZONE = 'UTC';
+
+-- Label statements in this session so we can retrieve them at the end.
 
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY1';
 
@@ -277,6 +285,24 @@ FROM GOLD.ORDER_METRICS;
 -- changes neither current order state nor event counts when stream is empty.
 
 CALL SILVER.APPLY_EVENTS_SNOWPARK();
+
+
+-- STEP: retrieve this student's tagged statements from the past hour.
+-- Includes worksheet and notebook sessions for the current user; no account-wide
+-- history privilege is needed for the student's own statements.
+-- The 1000-result limit applies BEFORE the tag filter: narrow the time range
+-- if recent activity would push the desired statements outside that window.
+-- QUERY_TAG is session-scoped. A task uses its own session and does not inherit
+-- this worksheet tag; use TASK_HISTORY above to verify the task graph.
+-- Source: https://docs.snowflake.com/en/sql-reference/functions/query_history
+
+SELECT query_id, start_time, execution_status, total_elapsed_time, query_text
+FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY_BY_USER(
+    END_TIME_RANGE_START => DATEADD('hour', -1, CURRENT_TIMESTAMP()),
+    RESULT_LIMIT => 1000,
+    INCLUDE_CLIENT_GENERATED_STATEMENT => TRUE))
+WHERE query_tag = 'ADV_2026_DAY1'
+ORDER BY start_time DESC;
 
 -- Optional alternative: see Optional-NotebookPipeline.sql. Do not run two consumers
 -- of the same stream concurrently. Hosted notebook execution requires prevalidation.

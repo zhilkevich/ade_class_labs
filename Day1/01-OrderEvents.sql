@@ -22,6 +22,12 @@ USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
 USE SCHEMA BRONZE;
 
+-- Use a common session time zone for classroom checks and LTZ history display.
+-- This is session setup, not a conversion of stored event timestamps.
+-- Fixture event_time strings already contain Z (UTC), so their TIMESTAMP_TZ
+-- interpretation does not depend on this setting. Timestamps without an offset
+-- would use the session zone when converted to TIMESTAMP_TZ.
+
 ALTER SESSION SET TIMEZONE='UTC';
 
 
