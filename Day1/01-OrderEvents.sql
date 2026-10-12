@@ -139,19 +139,18 @@ ORDER BY batch;
 -- CHECKPOINT: 2 staged files; 4 fixture rows in each batch.
 -- ──────────────────────────────────────────────────────────────────────────────
 -- Do not rerun the unloads. Duplicate file paths and load metadata are separate
--- from duplicate business event IDs. We test both explicitly in lab 02/04.
+-- from duplicate business event IDs.
 
 /* ----------------------------------------------------------------------------------
 
 The intended responsibilities:
 
-FIXTURE table:	    Controlled sample data used to generate reproducible input batches.
-EVENTS_STAGE:	    Landing area containing JSON files that later ingestion exercises load.
-EVENTS_RAW table: 	Created in Lab 02, where files are loaded into Bronze.
-EVENTS_STREAM:	    Created before the first load in Lab 02; tracks raw inserts.
+FIXTURE table:       Controlled sample data used to generate reproducible input batches.
+EVENTS_JSON format:  JSON parsing and GZIP compression settings for the staged files.
+EVENTS_STAGE:        Internal stage containing the two generated JSON files.
 
 
-Lab 01 finishes with reproducible JSON files on the internal stage.
-Lab 02 creates the ingestion target and stream immediately before loading.
-The append-only stream refresher is included with its creation in Lab 02.
+The result: two GZIP-compressed JSON files on the internal stage, generated
+from four fixture rows per batch. LIST verifies that both files are present;
+the fixture counts verify the number of input rows in each batch.
 ----------------------------------------------------------------------------------*/
