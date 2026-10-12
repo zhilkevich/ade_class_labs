@@ -30,11 +30,14 @@ USE SCHEMA SILVER;
 
 CREATE TABLE IF NOT EXISTS EVENT_INBOX LIKE BRONZE.EVENTS_RAW;
 
-SELECT COUNT(*) AS raw_rows FROM BRONZE.EVENTS_RAW;
+SELECT COUNT(*) AS raw_rows
+FROM BRONZE.EVENTS_RAW;
 
-SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+SELECT COUNT(*) AS inbox_rows
+FROM EVENT_INBOX;
 
-SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+SELECT COUNT(*) AS pending_rows
+FROM BRONZE.EVENTS_STREAM;
 
 -- CHECKPOINT on the first pass: raw_rows = 8, inbox_rows = 0, pending_rows = 8.
 
@@ -51,9 +54,11 @@ SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
 BEGIN TRANSACTION;
 
 INSERT INTO SILVER.EVENT_INBOX (payload, source_file, source_row, scan_time)
-SELECT payload, source_file, source_row, scan_time FROM BRONZE.EVENTS_STREAM;
+SELECT payload, source_file, source_row, scan_time
+FROM BRONZE.EVENTS_STREAM;
 
-SELECT payload:event_id::STRING AS event_id, source_file FROM EVENT_INBOX;
+SELECT payload:event_id::STRING AS event_id, source_file
+FROM EVENT_INBOX;
 
 -- First inspect the conversion query itself. Safe conversions return NULL
 -- for unsuitable values instead of making the whole query fail.
@@ -80,9 +85,11 @@ FROM EVENT_INBOX;
 
 ROLLBACK;
 
-SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+SELECT COUNT(*) AS inbox_rows
+FROM EVENT_INBOX;
 
-SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+SELECT COUNT(*) AS pending_rows
+FROM BRONZE.EVENTS_STREAM;
 
 -- CHECKPOINT on the first pass: inbox_rows = 0, pending_rows = 8.
 
@@ -114,9 +121,12 @@ FROM EVENT_INBOX;
 BEGIN TRANSACTION;
 
 INSERT INTO SILVER.EVENT_INBOX (payload, source_file, source_row, scan_time)
-SELECT payload, source_file, source_row, scan_time FROM BRONZE.EVENTS_STREAM;
+SELECT payload, source_file, source_row, scan_time
+FROM BRONZE.EVENTS_STREAM;
 
-SELECT event_id, version, amount FROM TYPED_EVENTS ORDER BY event_id;
+SELECT event_id, version, amount
+FROM TYPED_EVENTS
+ORDER BY event_id;
 
 -- The CASE expression applies the business contract to the typed values.
 -- Expect e3 to have BAD_AMOUNT; the other seven deliveries have no rejection.
@@ -160,15 +170,20 @@ FROM TYPED_EVENTS;
 BEGIN TRANSACTION;
 
 INSERT INTO SILVER.EVENT_INBOX (payload, source_file, source_row, scan_time)
-SELECT payload, source_file, source_row, scan_time FROM BRONZE.EVENTS_STREAM;
+SELECT payload, source_file, source_row, scan_time
+FROM BRONZE.EVENTS_STREAM;
 
 -- Start with a short inspection query: expect e3 / BAD_AMOUNT.
 
-SELECT event_id, reject_reason FROM CLASSIFIED_EVENTS WHERE reject_reason IS NOT NULL;
+SELECT event_id, reject_reason
+FROM CLASSIFIED_EVENTS
+WHERE reject_reason IS NOT NULL;
 
 -- Review the full-row filter we will reuse as REJECTED_EVENTS.
 
-SELECT * FROM CLASSIFIED_EVENTS WHERE reject_reason IS NOT NULL;
+SELECT *
+FROM CLASSIFIED_EVENTS
+WHERE reject_reason IS NOT NULL;
 
 -- An immutable event_id must not identify different valid payloads.
 -- The two e2 deliveries are identical, so they are not a conflict.
@@ -177,20 +192,24 @@ SELECT * FROM CLASSIFIED_EVENTS WHERE reject_reason IS NOT NULL;
 SELECT event_id
 FROM CLASSIFIED_EVENTS
 WHERE reject_reason IS NULL
-GROUP BY event_id HAVING COUNT(DISTINCT TO_JSON(payload)) > 1;
+GROUP BY event_id
+HAVING COUNT(DISTINCT TO_JSON(payload)) > 1;
 
 ROLLBACK;
 
 -- Create each view only after checking its SELECT; there is no open transaction.
 
 CREATE OR REPLACE VIEW REJECTED_EVENTS AS
-SELECT * FROM CLASSIFIED_EVENTS WHERE reject_reason IS NOT NULL;
+SELECT *
+FROM CLASSIFIED_EVENTS
+WHERE reject_reason IS NOT NULL;
 
 CREATE OR REPLACE VIEW EVENT_CONFLICTS AS
 SELECT event_id
 FROM CLASSIFIED_EVENTS
 WHERE reject_reason IS NULL
-GROUP BY event_id HAVING COUNT(DISTINCT TO_JSON(payload)) > 1;
+GROUP BY event_id
+HAVING COUNT(DISTINCT TO_JSON(payload)) > 1;
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 5: Run the processing statements manually, inspect the result, then roll back.
@@ -209,25 +228,31 @@ CREATE TABLE IF NOT EXISTS ORDERS_CURRENT
     region STRING
 );
 
-SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+SELECT COUNT(*) AS inbox_rows
+FROM EVENT_INBOX;
 
-SELECT COUNT(*) AS current_orders FROM ORDERS_CURRENT;
+SELECT COUNT(*) AS current_orders
+FROM ORDERS_CURRENT;
 
-SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+SELECT COUNT(*) AS pending_rows
+FROM BRONZE.EVENTS_STREAM;
 
 -- Record these baseline counts: 0 / 0 / 8 on the first pass.
 
 BEGIN TRANSACTION;
 
 INSERT INTO SILVER.EVENT_INBOX (payload, source_file, source_row, scan_time)
-SELECT payload, source_file, source_row, scan_time FROM BRONZE.EVENTS_STREAM;
+SELECT payload, source_file, source_row, scan_time
+FROM BRONZE.EVENTS_STREAM;
 
-SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+SELECT COUNT(*) AS inbox_rows
+FROM EVENT_INBOX;
 
 -- Verify conflicts before making target changes: expect conflicts = 0.
 -- If it is not zero, execute ROLLBACK and stop. Do not continue to MERGE.
 
-SELECT COUNT(*) AS conflicts FROM EVENT_CONFLICTS;
+SELECT COUNT(*) AS conflicts
+FROM EVENT_CONFLICTS;
 
 -- Inspect the candidate SELECT before embedding it in MERGE.
 -- It chooses one valid latest state per order from the preserved inbox history.
@@ -286,9 +311,12 @@ WHEN NOT MATCHED THEN
     VALUES (s.order_id, s.event_id, s.version, s.event_time,
             s.status, s.amount, s.region);
 
-SELECT * FROM ORDERS_CURRENT ORDER BY order_id;
+SELECT *
+FROM ORDERS_CURRENT
+ORDER BY order_id;
 
-SELECT event_id, reject_reason FROM REJECTED_EVENTS;
+SELECT event_id, reject_reason
+FROM REJECTED_EVENTS;
 
 -- The three current rows and e3 / BAD_AMOUNT are visible inside this transaction.
 
@@ -297,11 +325,14 @@ SELECT event_id, reject_reason FROM REJECTED_EVENTS;
 
 ROLLBACK;
 
-SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+SELECT COUNT(*) AS inbox_rows
+FROM EVENT_INBOX;
 
-SELECT COUNT(*) AS current_orders FROM ORDERS_CURRENT;
+SELECT COUNT(*) AS current_orders
+FROM ORDERS_CURRENT;
 
-SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+SELECT COUNT(*) AS pending_rows
+FROM BRONZE.EVENTS_STREAM;
 
 -- CHECKPOINT: the three counts match the baseline recorded before BEGIN.
 -- On the first pass: inbox_rows = 0, current_orders = 0, pending_rows = 8.
@@ -333,9 +364,11 @@ BEGIN
 
     -- Capture deliveries and consume the stream only if the transaction commits.
     INSERT INTO SILVER.EVENT_INBOX
-    SELECT payload, source_file, source_row, scan_time FROM BRONZE.EVENTS_STREAM;
+    SELECT payload, source_file, source_row, scan_time
+    FROM BRONZE.EVENTS_STREAM;
 
-    SELECT COUNT(*) INTO :conflicts FROM SILVER.EVENT_CONFLICTS;
+    SELECT COUNT(*) INTO :conflicts
+    FROM SILVER.EVENT_CONFLICTS;
 
     IF (conflicts > 0) THEN
         RAISE bad_event;
@@ -396,15 +429,20 @@ $$;
 
 CALL APPLY_EVENTS();
 
-SELECT * FROM ORDERS_CURRENT ORDER BY order_id;
+SELECT *
+FROM ORDERS_CURRENT
+ORDER BY order_id;
 
 -- CHECKPOINT: o1/e4/v2/PAID/120; o2/e5/v2/CANCELLED/50; o3/e6/v2/PLACED/30.
 
-SELECT event_id, reject_reason FROM REJECTED_EVENTS;
+SELECT event_id, reject_reason
+FROM REJECTED_EVENTS;
 
-SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+SELECT COUNT(*) AS inbox_rows
+FROM EVENT_INBOX;
 
-SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+SELECT COUNT(*) AS pending_rows
+FROM BRONZE.EVENTS_STREAM;
 
 -- CHECKPOINT on the first pass: e3 / BAD_AMOUNT; inbox_rows = 8; pending_rows = 0.
 
@@ -412,10 +450,13 @@ SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
 
 CALL APPLY_EVENTS();
 
-SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+SELECT COUNT(*) AS inbox_rows
+FROM EVENT_INBOX;
 
-SELECT COUNT(*) AS current_orders FROM ORDERS_CURRENT;
+SELECT COUNT(*) AS current_orders
+FROM ORDERS_CURRENT;
 
-SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+SELECT COUNT(*) AS pending_rows
+FROM BRONZE.EVENTS_STREAM;
 
 -- CHECKPOINT on the first pass: inbox_rows = 8, current_orders = 3, pending_rows = 0.
