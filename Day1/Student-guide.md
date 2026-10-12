@@ -1,6 +1,6 @@
 # Day 1 — Build and operate the order-event pipeline
 
-Open [Pipeline progression](Pipeline-progression.md) alongside the scripts to follow the objects and connections added by each lab.
+Open [Pipeline progression](Pipeline-progression.md) alongside the scripts to follow the objects and connections added by each lab. A [graphical PDF version](Pipeline-progression.pdf) provides one page per lab.
 
 ## Working agreement
 
