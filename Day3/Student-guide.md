@@ -4,6 +4,13 @@ Open [Pipeline progression](Pipeline-progression.md) alongside the scripts to fo
 
 Use the same account and original order project. Performance data lives in PERF. The instructor executes each numbered step and students repeat the same step. Do not promise a speedup: your profile determines the conclusion.
 
+
+## Required before leaving class
+
+Run **`99-CourseStop.sql`** and verify the final states. Closing Snowflake in the browser does not stop background work. Require all course tasks suspended, ORDERS_PIPE paused, and ADV_WH suspended; on Days 2-3 also stop the refresh/maintenance objects listed in that day's file. End any active notebook session using its controls. If a stop statement fails, resolve it and complete the remaining stops before leaving.
+
+Auto-suspend can put an idle warehouse to sleep, but enabled task/refresh workloads can wake it again. In the Day 1 primary path, APPLY_TASK is deliberately left suspended; its resumed child does not independently run on a schedule. A false WHEN check does not start warehouse compute. Snowpipe ingestion and other serverless services have separate charges and are not stopped by suspending ADV_WH. This shutdown prevents further background work; it does not remove storage charges for preserved course data.
+
 ## Execute in order
 
 1. `13-PerformanceSetup.sql` — one million deterministic orders and 100,000 customers generated with SQL. Verify scale, uniqueness and customer 42's ten rows. Disable result reuse for baseline experiments.

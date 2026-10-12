@@ -2,6 +2,13 @@
 
 Open [Pipeline progression](Pipeline-progression.md) alongside the scripts to follow the objects and connections added by each lab. A [graphical PDF version](Pipeline-progression.pdf) provides one page per lab.
 
+
+## Required before leaving class
+
+Run **`99-Stop.sql`** and verify the final states. Closing Snowflake in the browser does not stop background work. Require all course tasks suspended, ORDERS_PIPE paused, and ADV_WH suspended; on Days 2-3 also stop the refresh/maintenance objects listed in that day's file. End any active notebook session using its controls. If a stop statement fails, resolve it and complete the remaining stops before leaving.
+
+Auto-suspend can put an idle warehouse to sleep, but enabled task/refresh workloads can wake it again. In the Day 1 primary path, APPLY_TASK is deliberately left suspended; its resumed child does not independently run on a schedule. A false WHEN check does not start warehouse compute. Snowpipe ingestion and other serverless services have separate charges and are not stopped by suspending ADV_WH. This shutdown prevents further background work; it does not remove storage charges for preserved course data.
+
 ## Working agreement
 
 For each numbered step: instructor explains the purpose, executes it, pauses; everyone executes the same statements in their own identical environment; compare the checkpoint; discuss the result. SQL comments are the primary lab narrative. Do not Run All across asynchronous checkpoints. There is no instructor-only data generator.

@@ -6,6 +6,25 @@ Final shutdown — stop all explicitly created services
 3) Preserve or deliberately retire the training resources after review
 ----------------------------------------------------------------------------------*/
 
+-- REQUIRED END-OF-DAY STEP: every student runs this file before leaving.
+-- Closing the browser or worksheet does not suspend background objects.
+-- ADV_WH has AUTO_SUSPEND=60 and AUTO_RESUME=TRUE: idle compute can sleep,
+-- but later task/refresh queries can wake it and incur another billed startup.
+-- Main APPLY_TASK is normally left suspended in the labs. A scheduled task whose
+-- WHEN condition is false does not resume its warehouse, although condition
+-- evaluation has cloud-services overhead. Do not assume every enabled task
+-- keeps a warehouse running continuously.
+-- Snowpipe loads are billed separately from ADV_WH; warehouse suspension alone
+-- does not pause a pipe. No pending/new loads does not mean idle Snowpipe billing
+-- continues indefinitely: we pause it to prevent further unintended ingestion.
+-- Days 2-3 add refresh/maintenance services: stop those explicitly as shown below.
+-- End active notebook sessions using their controls if a notebook was used.
+-- Preserved tables/stage files still incur storage charges after compute stops.
+-- Sources:
+-- https://docs.snowflake.com/en/user-guide/tasks-intro
+-- https://docs.snowflake.com/en/sql-reference/sql/create-task
+-- https://docs.snowflake.com/en/user-guide/data-load-snowpipe-billing
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
@@ -23,6 +42,10 @@ USE ROLE ADV_LAB;
 USE SECONDARY ROLES NONE;
 
 ALTER TASK OPS.APPLY_TASK SUSPEND;
+
+-- Also stop the optional Lab 06 notebook consumer if it was created.
+
+ALTER TASK IF EXISTS OPS.NOTEBOOK_APPLY_TASK SUSPEND;
 
 ALTER TASK OPS.AUDIT_TASK SUSPEND;
 
@@ -68,3 +91,11 @@ $$;
 
 -- Account retention/deletion is a deliberate later administrative action.
 -- Do not DROP DATABASE as part of classroom shutdown; preserve query IDs/evidence.
+
+-- FINAL CHECK: all course tasks are suspended, the pipe is paused, and the
+-- warehouse state below is SUSPENDED. Days 2-3 also require refreshes suspended.
+-- Wait for already-running work to finish; SUSPEND prevents future task starts
+-- but does not cancel a task that was already executing.
+-- Do not run another data query after this check: AUTO_RESUME can wake ADV_WH.
+
+SHOW WAREHOUSES LIKE 'ADV_WH';

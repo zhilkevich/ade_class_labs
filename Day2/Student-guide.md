@@ -4,6 +4,13 @@ Open [Pipeline progression](Pipeline-progression.md) alongside the scripts to fo
 
 Work in your own course account. The instructor executes a numbered step; everyone repeats that step and checks its result before continuing. Select statement groups rather than executing the entire course as one batch. Scheduled operations require an explicit wait for evidence.
 
+
+## Required before leaving class
+
+Run **`99-Day2-Stop.sql`** and verify the final states. Closing Snowflake in the browser does not stop background work. Require all course tasks suspended, ORDERS_PIPE paused, and ADV_WH suspended; on Days 2-3 also stop the refresh/maintenance objects listed in that day's file. End any active notebook session using its controls. If a stop statement fails, resolve it and complete the remaining stops before leaving.
+
+Auto-suspend can put an idle warehouse to sleep, but enabled task/refresh workloads can wake it again. In the Day 1 primary path, APPLY_TASK is deliberately left suspended; its resumed child does not independently run on a schedule. A false WHEN check does not start warehouse compute. Snowpipe ingestion and other serverless services have separate charges and are not stopped by suspending ADV_WH. This shutdown prevents further background work; it does not remove storage charges for preserved course data.
+
 ## Before starting
 
 Complete Day 1 through `06-SnowparkAndDeployment.sql`. Expected state: 11 raw and inbox rows, three current orders, one BAD_AMOUNT rejection, no pending stream rows, two active US orders totaling USD 165. Suspend the root task between demonstrations. Use the same ADV_ORDERS objects throughout.
