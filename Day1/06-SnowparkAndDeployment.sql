@@ -12,6 +12,7 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY1';
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -21,6 +22,7 @@ ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY1';
 -- The first five files establish 3 current orders and active value USD 165.
 -- SQL is a useful baseline; Snowpark implements the same contract.
 -- Python runs inside Snowflake, with the same setup for every student.
+
 CREATE TABLE SILVER.REGION_REFERENCE
 (
     REGION_CODE  STRING,
@@ -51,6 +53,7 @@ CREATE TABLE SILVER.SNOWPARK_CANDIDATES LIKE SILVER.ORDERS_CURRENT;
 
 -- Confirm the pinned package is available in every participant account.
 -- Python3.12 / Snowpark1.55.1 was exercised on 2026-10-12; recheck before class.
+
 SELECT PACKAGE_NAME, VERSION
 FROM SNOWFLAKE.INFORMATION_SCHEMA.PACKAGES
 WHERE LANGUAGE = 'python'
@@ -63,6 +66,7 @@ WHERE LANGUAGE = 'python'
 
 -- Snowpark-OrderTransform.py is the identical handler, suitable for a Python
 -- worksheet with main as handler and String as return type. No local Python needed.
+
 CREATE PROCEDURE SILVER.APPLY_EVENTS_SNOWPARK()
 RETURNS STRING
 LANGUAGE PYTHON
@@ -154,21 +158,19 @@ $$;
 CALL SILVER.APPLY_EVENTS_SNOWPARK();
 
 SELECT * FROM SILVER.SNOWPARK_CANDIDATES ORDER BY ORDER_ID;
-SELECT EVENT_ID, REJECT_REASON FROM SILVER.SNOWPARK_EVENTS
-WHERE REJECT_REASON IS NOT NULL;
+
+SELECT EVENT_ID, REJECT_REASON FROM SILVER.SNOWPARK_EVENTS WHERE REJECT_REASON IS NOT NULL;
+
 -- CHECKPOINT: candidates o1/e4/120, o2/e5/50 cancelled, o3/e8/45; one BAD_AMOUNT.
 
-SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION
-FROM SILVER.SNOWPARK_CANDIDATES
+SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION FROM SILVER.SNOWPARK_CANDIDATES
 MINUS
-SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION
-FROM SILVER.ORDERS_CURRENT;
+SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION FROM SILVER.ORDERS_CURRENT;
 
-SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION
-FROM SILVER.ORDERS_CURRENT
+SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION FROM SILVER.ORDERS_CURRENT
 MINUS
-SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION
-FROM SILVER.SNOWPARK_CANDIDATES;
+SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION FROM SILVER.SNOWPARK_CANDIDATES;
+
 -- CHECKPOINT: both differences are empty. Equality does not prove all contracts;
 -- inspect rejected rows and the source replay next.
 
@@ -177,16 +179,22 @@ FROM SILVER.SNOWPARK_CANDIDATES;
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- If 99-Stop was run earlier, this also restarts the child. Root stays suspended.
+
 ALTER TASK OPS.APPLY_TASK SUSPEND;
+
 ALTER TASK OPS.AUDIT_TASK SUSPEND;
+
 -- Wait for any in-flight run to finish before modifying the graph.
+
 SHOW TASKS IN SCHEMA OPS;
 
 ALTER TASK OPS.APPLY_TASK MODIFY AS CALL ADV_ORDERS.SILVER.APPLY_EVENTS_SNOWPARK();
+
 ALTER TASK OPS.AUDIT_TASK RESUME;
 
 -- Add one duplicate delivery in a distinct synthetic file lineage.
 -- It intentionally bypasses file ingestion to isolate business replay behavior.
+
 INSERT INTO BRONZE.EVENTS_RAW
 SELECT PAYLOAD, 'snowpark/replay-e8', 1, CURRENT_TIMESTAMP()
 FROM BRONZE.EVENTS_RAW
@@ -202,9 +210,13 @@ WHERE DATABASE_NAME = 'ADV_ORDERS'
 ORDER BY SCHEDULED_TIME DESC;
 
 -- Do not proceed until both latest task executions are SUCCEEDED.
+
 SELECT COUNT(*) AS PENDING_ROWS FROM BRONZE.EVENTS_STREAM;
+
 SELECT * FROM GOLD.ORDER_METRICS;
+
 -- CHECKPOINT after success: stream 0; raw/inbox 11; current 3; active value 165.
 -- Preserve cancellation and late-version protections. Repeating the handler
 -- changes neither current order state nor event counts when stream is empty.
+
 CALL SILVER.APPLY_EVENTS_SNOWPARK();

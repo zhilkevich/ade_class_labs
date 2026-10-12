@@ -6,6 +6,7 @@
 ----------------------------------------------------------------------------------*/
 
 -- 04 | Gold and observable task graph
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
@@ -19,9 +20,11 @@ SELECT
 FROM SILVER.ORDERS_CURRENT
 WHERE status <> 'CANCELLED'
 GROUP BY region;
+
 -- Current active order value is not recognized revenue, nor sum of event amounts.
-SELECT *
-FROM GOLD.ORDER_METRICS; -- US: 2, 150.00; no EU active orders
+
+SELECT * FROM GOLD.ORDER_METRICS; -- US: 2, 150.00; no EU active orders
+
 CREATE TABLE RUN_AUDIT
 (
     recorded_at TIMESTAMP_LTZ,
@@ -41,18 +44,17 @@ CREATE TASK AUDIT_TASK
     AFTER ADV_ORDERS.OPS.APPLY_TASK
 AS
 INSERT INTO ADV_ORDERS.OPS.RUN_AUDIT
-SELECT
-    CURRENT_TIMESTAMP(),
-    COUNT(*),
-    SUM(IFF(status <> 'CANCELLED', amount, 0))
-FROM ADV_ORDERS.SILVER.ORDERS_CURRENT;
+SELECT CURRENT_TIMESTAMP(), COUNT(*), SUM(IFF(status <> 'CANCELLED', amount, 0)) FROM ADV_ORDERS.SILVER.ORDERS_CURRENT;
+
 -- Child must be resumed; root stays suspended, so no unattended schedule.
+
 ALTER TASK AUDIT_TASK RESUME;
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 1: New event arrives after manual processing. Duplicate e8 deliberately.
 -- ──────────────────────────────────────────────────────────────────────────────
 -- SQL-created staged file follows the same ingest route, no local Python.
+
 COPY INTO @BRONZE.EVENTS_STAGE/batch2/update.json.gz
 FROM
 (
@@ -66,13 +68,17 @@ SINGLE = TRUE
 OVERWRITE = FALSE;
 
 ALTER PIPE BRONZE.ORDERS_PIPE REFRESH PREFIX = 'update';
+
 -- As in lab 02, REFRESH is used only as a bounded lab recovery trigger.
-SELECT COUNT(*)
-FROM BRONZE.EVENTS_RAW; -- wait for 10 before continuing
-SELECT COUNT(*)
-FROM BRONZE.EVENTS_STREAM; -- 2
+
+SELECT COUNT(*) FROM BRONZE.EVENTS_RAW; -- wait for 10 before continuing
+
+SELECT COUNT(*) FROM BRONZE.EVENTS_STREAM; -- 2
+
 EXECUTE TASK APPLY_TASK;
+
 -- EXECUTE TASK is asynchronous. Refresh history until BOTH tasks SUCCEEDED.
+
 SELECT
     NAME,
     STATE,
@@ -86,15 +92,15 @@ WHERE DATABASE_NAME = 'ADV_ORDERS'
   AND SCHEMA_NAME = 'OPS'
 ORDER BY SCHEDULED_TIME DESC;
 
-SELECT *
-FROM RUN_AUDIT
-ORDER BY recorded_at DESC; -- 3 orders, active value 165
-SELECT *
-FROM GOLD.ORDER_METRICS; -- US: 2, 165
+SELECT * FROM RUN_AUDIT ORDER BY recorded_at DESC; -- 3 orders, active value 165
+
+SELECT * FROM GOLD.ORDER_METRICS; -- US: 2, 165
+
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 2: Execute again with no stream data; inspect SKIPPED/condition behavior.
 -- ──────────────────────────────────────────────────────────────────────────────
 -- Do not use audit row count as an exactly-once execution guarantee.
+
 EXECUTE TASK APPLY_TASK;
 
 -- ──────────────────────────────────────────────────────────────────────────────
