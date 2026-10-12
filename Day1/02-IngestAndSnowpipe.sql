@@ -100,6 +100,17 @@ ON_ERROR = SKIP_FILE;
 -- REFRESH queues recently staged files (7-day limit); ingestion is asynchronous.
 ALTER PIPE ORDERS_PIPE REFRESH;
 
+-- HOW TO READ PIPE STATUS
+-- executionState = RUNNING is normal, including when no files are being loaded.
+-- This is the pipe's operating state, not a batch-progress status.
+-- Do not wait for COMPLETED after the rows arrive; RUNNING can remain unchanged.
+-- pendingFileCount counts queued files; expect 0 when this bounded queue drains.
+-- A zero queue alone does not prove the expected files loaded successfully.
+-- lastIngestedFilePath / lastIngestedTimestamp identify the latest successful load
+-- when those fields are present. For this exercise, inspect the batch2 file.
+-- PAUSED or STOPPED_/STALLED_ states need investigation if loading is expected.
+-- Read error / fault details when present; a recorded last error may be historical.
+-- Source: https://docs.snowflake.com/en/sql-reference/functions/system_pipe_status
 SELECT SYSTEM$PIPE_STATUS('ADV_ORDERS.BRONZE.ORDERS_PIPE');
 
 SELECT COUNT(*) AS raw_rows
@@ -117,6 +128,11 @@ FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- CHECKPOINT: 8 raw rows, 2 loaded files. Wait/requery for up to 5 minutes.
+-- Confirm the expected batch1 and batch2 paths in COPY_HISTORY:
+-- STATUS = Loaded, ROW_COUNT = 4 per file, ERROR_COUNT = 0.
+-- Batch1 was bulk-loaded; batch2 was loaded by this pipe. Total raw_rows = 8.
+-- RUNNING with pendingFileCount = 0 is compatible with this completed load.
+-- If history has not appeared yet, wait/requery; row count alone is insufficient.
 -- ──────────────────────────────────────────────────────────────────────────────
 -- If not reached: inspect pipe status/history; record query IDs and errors.
 -- Stop here instead of claiming success. The documented fallback in the guide
