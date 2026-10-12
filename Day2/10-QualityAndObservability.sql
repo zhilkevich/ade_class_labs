@@ -12,29 +12,31 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 1 │ Run immediate SQL quality controls
 -- ──────────────────────────────────────────────────────────────────────────────
 
-SELECT 'NULL_ORDER_ID' AS CHECK_NAME, COUNT_IF(ORDER_ID IS NULL) AS FAILURES
-FROM SILVER.ORDERS_CURRENT
+SELECT 'NULL_ORDER_ID' AS CHECK_NAME, COUNT_IF(ORDER_ID IS NULL) AS FAILURES FROM SILVER.ORDERS_CURRENT
 UNION ALL
-SELECT 'DUPLICATE_ORDER_ID', COUNT(*) - COUNT(DISTINCT ORDER_ID)
-FROM SILVER.ORDERS_CURRENT
+SELECT 'DUPLICATE_ORDER_ID', COUNT(*) - COUNT(DISTINCT ORDER_ID) FROM SILVER.ORDERS_CURRENT
 UNION ALL
-SELECT 'NEGATIVE_AMOUNT', COUNT_IF(AMOUNT < 0)
-FROM SILVER.ORDERS_CURRENT;
+SELECT 'NEGATIVE_AMOUNT', COUNT_IF(AMOUNT < 0) FROM SILVER.ORDERS_CURRENT;
+
 -- CHECKPOINT: zero failures in each control.
 
-SELECT REJECT_REASON, COUNT(*) AS REJECTED_ROWS
-FROM SILVER.REJECTED_EVENTS GROUP BY REJECT_REASON;
+SELECT REJECT_REASON, COUNT(*) AS REJECTED_ROWS FROM SILVER.REJECTED_EVENTS GROUP BY REJECT_REASON;
+
 -- CHECKPOINT: BAD_AMOUNT / 1; a rejection is preserved evidence, not a silent loss.
 
 SELECT COUNT(*) AS RAW_ROWS FROM BRONZE.EVENTS_RAW;
+
 SELECT COUNT(*) AS INBOX_ROWS FROM SILVER.EVENT_INBOX;
+
 SELECT COUNT(*) AS PENDING_ROWS FROM BRONZE.EVENTS_STREAM;
+
 -- Full Day 1 including Snowpark replay: raw/inbox 11, pending 0.
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -42,9 +44,13 @@ SELECT COUNT(*) AS PENDING_ROWS FROM BRONZE.EVENTS_STREAM;
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- Enterprise account and DMF privileges required; validate this for the whole class.
+
 USE ROLE ACCOUNTADMIN;
+
 GRANT EXECUTE DATA METRIC FUNCTION ON ACCOUNT TO ROLE ADV_LAB;
+
 GRANT APPLICATION ROLE SNOWFLAKE.DATA_QUALITY_MONITORING_VIEWER TO ROLE ADV_LAB;
+
 USE ROLE ADV_LAB;
 
 CREATE DATA METRIC FUNCTION GOVERNANCE.NEGATIVE_AMOUNT_COUNT
@@ -54,6 +60,7 @@ AS 'SELECT COUNT_IF(ARG_C < 0) FROM ARG_T';
 
 SELECT GOVERNANCE.NEGATIVE_AMOUNT_COUNT(
     SELECT AMOUNT FROM SILVER.ORDERS_CURRENT) AS NEGATIVE_AMOUNTS;
+
 -- CHECKPOINT: 0. A direct call validates the metric logic immediately.
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -61,13 +68,17 @@ SELECT GOVERNANCE.NEGATIVE_AMOUNT_COUNT(
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- Never damage the course orders merely to make a monitoring result interesting.
+
 CREATE TABLE OPS.DQ_DEMO (AMOUNT NUMBER(12, 2));
+
 INSERT INTO OPS.DQ_DEMO VALUES (10), (-5), (NULL);
 
 SELECT GOVERNANCE.NEGATIVE_AMOUNT_COUNT(SELECT AMOUNT FROM OPS.DQ_DEMO);
+
 -- CHECKPOINT: 1. NULL handling is a separate quality rule.
 
 ALTER TABLE OPS.DQ_DEMO SET DATA_METRIC_SCHEDULE = '5 MINUTE';
+
 ALTER TABLE OPS.DQ_DEMO ADD DATA METRIC FUNCTION
     GOVERNANCE.NEGATIVE_AMOUNT_COUNT ON (AMOUNT);
 
@@ -77,6 +88,7 @@ SELECT * FROM TABLE(INFORMATION_SCHEMA.DATA_METRIC_FUNCTION_REFERENCES(
 SELECT * FROM SNOWFLAKE.LOCAL.DATA_QUALITY_MONITORING_RESULTS
 WHERE TABLE_DATABASE = 'ADV_ORDERS' AND TABLE_NAME = 'DQ_DEMO'
 ORDER BY MEASUREMENT_TIME DESC;
+
 -- Scheduled results are asynchronous and may not appear in five exact minutes.
 -- Wait for a matching metric/measurement row, not merely successful association DDL.
 -- If service/edition/privilege blocks this branch, record BLOCKED and retain
@@ -84,6 +96,7 @@ ORDER BY MEASUREMENT_TIME DESC;
 
 ALTER TABLE OPS.DQ_DEMO DROP DATA METRIC FUNCTION
     GOVERNANCE.NEGATIVE_AMOUNT_COUNT ON (AMOUNT);
+
 ALTER TABLE OPS.DQ_DEMO UNSET DATA_METRIC_SCHEDULE;
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -97,7 +110,7 @@ WHERE DATABASE_NAME = 'ADV_ORDERS' ORDER BY SCHEDULED_TIME DESC;
 SELECT * FROM TABLE(INFORMATION_SCHEMA.DYNAMIC_TABLE_REFRESH_HISTORY(
     NAME_PREFIX => 'ADV_ORDERS.GOLD', RESULT_LIMIT => 100));
 
-SELECT * FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY_BY_SESSION(RESULT_LIMIT => 100))
-ORDER BY START_TIME DESC;
+SELECT * FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY_BY_SESSION(RESULT_LIMIT => 100)) ORDER BY START_TIME DESC;
+
 -- Correlate query IDs, object state and business totals. Account Usage views can
 -- have latency; session history is useful for immediate classroom troubleshooting.

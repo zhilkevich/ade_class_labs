@@ -12,6 +12,7 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -22,10 +23,13 @@ USE ROLE ADV_LAB;
 USE SECONDARY ROLES NONE;
 
 ALTER TASK OPS.APPLY_TASK SUSPEND;
+
 ALTER TASK OPS.AUDIT_TASK SUSPEND;
+
 ALTER PIPE BRONZE.ORDERS_PIPE SET PIPE_EXECUTION_PAUSED = TRUE;
 
 ALTER DYNAMIC TABLE GOLD.ORDER_METRICS_DT SUSPEND;
+
 ALTER DYNAMIC TABLE GOLD.ORDER_DETAIL_DT SUSPEND;
 
 -- Run these only if the DMF branch was associated and not detached in lab 10.
@@ -34,11 +38,15 @@ ALTER DYNAMIC TABLE GOLD.ORDER_DETAIL_DT SUSPEND;
 -- ALTER TABLE OPS.DQ_DEMO UNSET DATA_METRIC_SCHEDULE;
 
 SHOW DYNAMIC TABLES IN SCHEMA GOLD;
+
 SHOW TASKS IN SCHEMA OPS;
+
 SELECT SYSTEM$PIPE_STATUS('ADV_ORDERS.BRONZE.ORDERS_PIPE');
+
 -- Wait for already-running executions before any future reset.
 
 -- USE WAREHOUSE does not resume compute by itself. Suspend only if running.
+
 EXECUTE IMMEDIATE $$
 DECLARE
     warehouse_state STRING;
@@ -54,4 +62,5 @@ BEGIN
     END IF;
 END;
 $$;
+
 -- No DROP DATABASE or DROP ROLE: Day 3 reuses the same governance and Gold.

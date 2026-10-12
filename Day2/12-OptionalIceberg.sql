@@ -12,6 +12,7 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -20,8 +21,11 @@ ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 
 -- This optional branch is gated. It does not create credentials or cloud storage.
 -- Every participant reproducing it needs the SAME validated preparation path.
+
 SHOW EXTERNAL VOLUMES;
+
 SHOW ICEBERG TABLES IN DATABASE ADV_ORDERS;
+
 -- If no prepared table/volume is available, mark BLOCKED and use the discussion
 -- in Optional-Iceberg-DuckDB.md. The core Day 2 sequence is unaffected.
 

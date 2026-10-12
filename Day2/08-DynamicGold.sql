@@ -12,6 +12,7 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -20,6 +21,7 @@ ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 
 -- Gold stores enriched detail first; metrics depend on that detail.
 -- Policy controls will be applied at the consumer boundary, not the source.
+
 CREATE TABLE SILVER.ORDER_CONTACTS
 (
     ORDER_ID STRING,
@@ -55,8 +57,11 @@ GROUP BY REGION;
 
 -- INITIALIZE ON_CREATE makes initial creation wait for initialization.
 -- A five-minute target is a staleness goal, not a fixed timer or guarantee.
+
 SHOW DYNAMIC TABLES IN SCHEMA GOLD;
+
 SELECT * FROM GOLD.ORDER_METRICS_DT;
+
 -- CHECKPOINT: US / 2 / 165; no active EU orders.
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -70,6 +75,7 @@ SELECT REGION, ACTIVE_ORDERS, ACTIVE_AMOUNT_USD FROM GOLD.ORDER_METRICS;
 SELECT REGION, ACTIVE_ORDERS, ACTIVE_AMOUNT_USD FROM GOLD.ORDER_METRICS
 MINUS
 SELECT REGION, ACTIVE_ORDERS, ACTIVE_AMOUNT_USD FROM GOLD.ORDER_METRICS_DT;
+
 -- CHECKPOINT: both differences empty.
 
 SELECT NAME, STATE, STATE_CODE, STATE_MESSAGE, REFRESH_START_TIME, REFRESH_END_TIME
@@ -83,19 +89,24 @@ ORDER BY REFRESH_START_TIME DESC;
 
 -- Teaching update targets Silver directly to isolate DT maintenance.
 -- Restore it before returning to the event pipeline; do not call APPLY_EVENTS here.
+
 UPDATE SILVER.ORDERS_CURRENT SET AMOUNT = 135 WHERE ORDER_ID = 'o1';
 
 ALTER DYNAMIC TABLE GOLD.ORDER_DETAIL_DT REFRESH;
+
 ALTER DYNAMIC TABLE GOLD.ORDER_METRICS_DT REFRESH;
 
 SELECT * FROM GOLD.ORDER_METRICS_DT;
+
 -- CHECKPOINT after refresh: US / 2 / 180. Requery/history if refresh is still active.
 
 UPDATE SILVER.ORDERS_CURRENT SET AMOUNT = 120 WHERE ORDER_ID = 'o1';
 
 ALTER DYNAMIC TABLE GOLD.ORDER_DETAIL_DT REFRESH;
+
 ALTER DYNAMIC TABLE GOLD.ORDER_METRICS_DT REFRESH;
 
 SELECT * FROM GOLD.ORDER_METRICS_DT;
+
 -- CHECKPOINT restored: US / 2 / 165. Owner ADV_LAB retains source privileges.
 -- Optional practice: inspect/change target lag, then restore the five-minute goal.

@@ -12,6 +12,7 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -25,9 +26,11 @@ SELECT REGION, COUNT(*) AS ACTIVE_ORDERS, SUM(AMOUNT) AS ACTIVE_AMOUNT_USD
 FROM CONSUMER.ORDERS
 WHERE STATUS <> 'CANCELLED'
 GROUP BY REGION;
+
 -- CHECKPOINT: US / 2 / 165; contact values remain masked.
 
 SELECT CURRENT_ROLE(), CURRENT_USER();
+
 -- A client, notebook or app must be tested for its real execution role.
 -- An application that executes as ADV_LAB can see every region; a view name
 -- alone does not make an owner-rights application respect each viewer's roles.
@@ -37,12 +40,16 @@ SELECT CURRENT_ROLE(), CURRENT_USER();
 -- ──────────────────────────────────────────────────────────────────────────────
 
 USE ROLE ADV_LAB;
+
 GRANT CREATE STREAMLIT ON SCHEMA CONSUMER TO ROLE ADV_ANALYST_US;
+
 -- Optional hosted notebook uses the same consumer role and view boundary.
+
 GRANT CREATE NOTEBOOK ON SCHEMA CONSUMER TO ROLE ADV_ANALYST_US;
 
 USE ROLE ADV_ANALYST_US;
 USE SECONDARY ROLES NONE;
+
 -- In Snowsight create a Streamlit app in ADV_ORDERS.CONSUMER using ADV_WH.
 -- Paste Streamlit-Gold.py. Create it as ADV_ANALYST_US, NOT ADV_LAB.
 -- The app is deliberately US-scoped for all its viewers; it is not per-viewer RBAC.
@@ -57,11 +64,10 @@ USE SECONDARY ROLES NONE;
 USE ROLE ADV_LAB;
 
 CREATE SECURE VIEW CONSUMER.SHARE_US_METRICS AS
-SELECT REGION, ACTIVE_ORDERS, ACTIVE_AMOUNT_USD
-FROM GOLD.ORDER_METRICS_DT
-WHERE REGION = 'US';
+SELECT REGION, ACTIVE_ORDERS, ACTIVE_AMOUNT_USD FROM GOLD.ORDER_METRICS_DT WHERE REGION = 'US';
 
 SELECT * FROM CONSUMER.SHARE_US_METRICS;
+
 -- CHECKPOINT: US / 2 / 165. This intentionally shares ONLY US aggregate values.
 -- Current-role policies do not transfer transparently to every external consumer.
 -- Optional-DataShare.sql supplies producer/consumer steps with a prevalidated

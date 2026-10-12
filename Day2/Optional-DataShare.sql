@@ -12,6 +12,7 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -19,13 +20,18 @@ ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- Optional branch; execute only after a second authorized training account exists.
+
 USE ROLE ACCOUNTADMIN;
 
 CREATE SHARE ADV_US_METRICS_SHARE;
+
 GRANT USAGE ON DATABASE ADV_ORDERS TO SHARE ADV_US_METRICS_SHARE;
+
 GRANT USAGE ON SCHEMA ADV_ORDERS.CONSUMER TO SHARE ADV_US_METRICS_SHARE;
+
 GRANT SELECT ON VIEW ADV_ORDERS.CONSUMER.SHARE_US_METRICS
     TO SHARE ADV_US_METRICS_SHARE;
+
 SHOW GRANTS TO SHARE ADV_US_METRICS_SHARE;
 
 -- Deliberately commented: replace approved identifiers during rehearsal.

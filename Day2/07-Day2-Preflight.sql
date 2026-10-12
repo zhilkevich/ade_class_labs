@@ -12,6 +12,7 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE = 'UTC';
+
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -21,17 +22,24 @@ ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
 ALTER WAREHOUSE ADV_WH RESUME IF SUSPENDED;
 
 SELECT CURRENT_ACCOUNT(), CURRENT_REGION(), CURRENT_ROLE(), CURRENT_VERSION();
+
 SELECT * FROM SILVER.ORDERS_CURRENT ORDER BY ORDER_ID;
+
 SELECT * FROM GOLD.ORDER_METRICS;
+
 SELECT COUNT(*) AS PENDING_ROWS FROM BRONZE.EVENTS_STREAM;
+
 -- CHECKPOINT: 3 orders; active 2 / USD 165; no pending stream rows.
 -- Cancellations remain in Silver. Stop and repair a mismatch before Day 2.
 
 CREATE SCHEMA IF NOT EXISTS GOVERNANCE;
+
 CREATE SCHEMA IF NOT EXISTS CONSUMER;
 
 -- No DROP/CREATE of Bronze, streams or Silver is permitted as a handoff repair.
+
 SHOW PROCEDURES LIKE 'APPLY_EVENTS_SNOWPARK' IN SCHEMA SILVER;
+
 SHOW TASKS IN SCHEMA OPS;
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -43,7 +51,9 @@ SHOW TASKS IN SCHEMA OPS;
 -- Edition is verified by the administrator in the account configuration.
 -- Enterprise policy/DMF branches must be prevalidated before live class.
 -- Root task remains suspended throughout Day 2; we use deliberate manual runs.
+
 ALTER TASK OPS.APPLY_TASK SUSPEND;
+
 ALTER TASK OPS.AUDIT_TASK SUSPEND;
 
 SELECT 'DAY2_BASELINE' AS CHECKPOINT, COUNT(*) AS CURRENT_ORDERS,
