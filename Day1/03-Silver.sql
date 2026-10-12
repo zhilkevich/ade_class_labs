@@ -1,9 +1,10 @@
 /*----------------Snowflake Advanced 3-day class Lab:-------------------------------
 -- Copyright © 2026 Innovation In Software Corporation. All rights reserved.
-1) Inspect real rows and develop each SELECT before creating its view
-2) Run the processing statements individually and demonstrate ROLLBACK
-3) Combine the verified steps into APPLY_EVENTS and commit the real result
-4) Repeat execution and verify that the accepted state remains unchanged
+1) Inspect Bronze input and define the Silver target tables
+2) Develop each SELECT with real rows before creating its view
+3) Run the processing statements individually and demonstrate ROLLBACK
+4) Combine the verified steps into APPLY_EVENTS and commit the real result
+5) Repeat execution and verify that the accepted state remains unchanged
 ----------------------------------------------------------------------------------*/
 
 -- 03 | Develop, inspect, then make Silver processing reusable.
@@ -22,13 +23,44 @@ USE SCHEMA SILVER;
 -- No tasks should be processing this same inbox while we demonstrate transactions.
 
 -- ──────────────────────────────────────────────────────────────────────────────
--- STEP 1: Create the inbox and record the starting state.
+-- STEP 1: Inspect Bronze input and define the Silver destination.
 -- ──────────────────────────────────────────────────────────────────────────────
+
+-- Start with what we already have: immutable events delivered to Bronze.
+-- Each payload is a full order state reported by the source transactional system.
+-- The same event may arrive more than once; arrival order may differ from revision order.
+
+SELECT payload, source_file, source_row, scan_time
+FROM BRONZE.EVENTS_RAW
+ORDER BY source_file, source_row;
+
+-- Now define the known Silver tables before developing the transformation.
+-- ORDERS_CURRENT is the output Gold will consume: one accepted current state
+-- per order_id, with typed attributes and the event_id/version that established it.
+-- Newer accepted states take precedence; a late older event must not overwrite them.
+-- Keep CANCELLED orders in Silver so an older event cannot recreate an active order.
+-- One row per order is enforced by our selection/MERGE logic, not a declared constraint.
+-- EVENT_INBOX supports processing and investigation: retain every consumed delivery,
+-- including duplicates and invalid payloads, together with its delivery lineage.
+-- Views and the procedure will implement the path from Bronze to these tables.
 
 -- The inbox is durable delivery history. Rejected data remains explainable.
 -- LIKE gives it the same payload and lineage columns as the Bronze destination.
 
 CREATE TABLE IF NOT EXISTS EVENT_INBOX LIKE BRONZE.EVENTS_RAW;
+
+-- Define the current-order destination now; we will populate it in Step 5.
+
+CREATE TABLE IF NOT EXISTS ORDERS_CURRENT
+(
+    order_id STRING,
+    event_id STRING,
+    version NUMBER,
+    event_time TIMESTAMP_TZ,
+    status STRING,
+    amount NUMBER(12, 2),
+    region STRING
+);
 
 SELECT COUNT(*) AS raw_rows
 FROM BRONZE.EVENTS_RAW;
@@ -36,10 +68,14 @@ FROM BRONZE.EVENTS_RAW;
 SELECT COUNT(*) AS inbox_rows
 FROM EVENT_INBOX;
 
+SELECT COUNT(*) AS current_orders
+FROM ORDERS_CURRENT;
+
 SELECT COUNT(*) AS pending_rows
 FROM BRONZE.EVENTS_STREAM;
 
--- CHECKPOINT on the first pass: raw_rows = 8, inbox_rows = 0, pending_rows = 8.
+-- CHECKPOINT on the first pass: raw_rows = 8, inbox_rows = 0,
+-- current_orders = 0, pending_rows = 8. The destination is defined, but not populated.
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 2: Try the typed SELECT with real input, then create the view.
@@ -238,19 +274,6 @@ HAVING COUNT(DISTINCT TO_JSON(payload)) > 1;
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 5: Run the processing statements manually, inspect the result, then roll back.
 -- ──────────────────────────────────────────────────────────────────────────────
-
--- Create the target before opening the trial transaction; preserve any existing rows.
-
-CREATE TABLE IF NOT EXISTS ORDERS_CURRENT
-(
-    order_id STRING,
-    event_id STRING,
-    version NUMBER,
-    event_time TIMESTAMP_TZ,
-    status STRING,
-    amount NUMBER(12, 2),
-    region STRING
-);
 
 SELECT COUNT(*) AS inbox_rows
 FROM EVENT_INBOX;
