@@ -7,12 +7,27 @@
 
 -- 04 | Gold and observable task graph
 
+-- Diagram: Pipeline-progression.md, Lab 04 - Task orchestration and Gold.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
 
-CREATE VIEW GOLD.ORDER_METRICS AS
+-- SETUP: define the audit destination before connecting the task graph.
+-- Existing SILVER.ORDERS_CURRENT holds business state; RUN_AUDIT will hold
+-- one control-total snapshot per successful audit execution. It is not event history.
+
+CREATE TABLE IF NOT EXISTS RUN_AUDIT
+(
+    recorded_at TIMESTAMP_LTZ,
+    order_count NUMBER,
+    active_amount_usd NUMBER(12, 2)
+);
+
+-- DEVELOPMENT: define the live Gold query, then connect processing and audit.
+
+CREATE OR REPLACE VIEW GOLD.ORDER_METRICS AS
 SELECT
     region,
     COUNT(*) active_orders,
@@ -24,13 +39,6 @@ GROUP BY region;
 -- Current active order value is not recognized revenue, nor sum of event amounts.
 
 SELECT * FROM GOLD.ORDER_METRICS; -- US: 2, 150.00; no EU active orders
-
-CREATE TABLE RUN_AUDIT
-(
-    recorded_at TIMESTAMP_LTZ,
-    order_count NUMBER,
-    active_amount_usd NUMBER(12, 2)
-);
 
 CREATE TASK APPLY_TASK
     WAREHOUSE = ADV_WH

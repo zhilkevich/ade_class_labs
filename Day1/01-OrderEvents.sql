@@ -15,6 +15,8 @@ Students should finish with:
 
 -- 01 | Project contract and SQL-only fixture creation
 -- Instructor runs each STEP; everyone repeats and checks before continuing.
+-- Diagram: Pipeline-progression.md, Lab 01 - Fixture and staged files.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;

@@ -6,6 +6,8 @@ C3/C4 completion — Snowpark with the existing order contract
 3) Deploy the same source and invoke it through the existing task graph
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 06 - Snowpark implementation and deployment.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
@@ -29,10 +31,6 @@ CREATE TABLE SILVER.REGION_REFERENCE
     REGION_LABEL STRING
 );
 
-INSERT INTO SILVER.REGION_REFERENCE VALUES
-    ('US', 'United States'),
-    ('EU', 'Europe');
-
 CREATE TABLE SILVER.SNOWPARK_EVENTS
 (
     EVENT_ID          STRING,
@@ -50,6 +48,15 @@ CREATE TABLE SILVER.SNOWPARK_EVENTS
 );
 
 CREATE TABLE SILVER.SNOWPARK_CANDIDATES LIKE SILVER.ORDERS_CURRENT;
+
+-- The three table definitions above establish the destinations before processing.
+-- REGION_REFERENCE enriches region labels; SNOWPARK_EVENTS holds classified
+-- deliveries; SNOWPARK_CANDIDATES holds one selected state per order.
+-- The handler joins, populates these tables and merges into existing ORDERS_CURRENT.
+
+INSERT INTO SILVER.REGION_REFERENCE VALUES
+    ('US', 'United States'),
+    ('EU', 'Europe');
 
 -- Confirm the pinned package is available in every participant account.
 -- Python3.12 / Snowpark1.55.1 was exercised on 2026-10-12; recheck before class.

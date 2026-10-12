@@ -7,10 +7,27 @@
 
 -- 05 | Day 1 acceptance and handoff
 
+-- Diagram: Pipeline-progression.md, Lab 05 - Acceptance and rollback evidence.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
 USE SCHEMA OPS;
+
+-- SETUP: disposable source and sink for the rollback demonstration.
+-- These objects are separate from the order pipeline; create them before checks.
+
+CREATE TEMP TABLE STREAM_DEMO
+(
+    id NUMBER
+);
+
+CREATE TEMP TABLE STREAM_DEMO_SINK
+(
+    id NUMBER
+);
+
+CREATE STREAM STREAM_DEMO_CHANGES ON TABLE STREAM_DEMO APPEND_ONLY=TRUE;
 
 -- Each row must say PASS after labs 01-04. Save results and query IDs.
 
@@ -48,18 +65,6 @@ SELECT order_id, event_id, version, status, amount FROM SILVER.ORDERS_CURRENT;
 
 -- Committed DML consumes a stream; rolled-back DML must not. Demonstrate on
 -- separate temporary objects so the course pipeline's state remains intact.
-
-CREATE TEMP TABLE STREAM_DEMO
-(
-    id NUMBER
-);
-
-CREATE STREAM STREAM_DEMO_CHANGES ON TABLE STREAM_DEMO APPEND_ONLY=TRUE;
-
-CREATE TEMP TABLE STREAM_DEMO_SINK
-(
-    id NUMBER
-);
 
 INSERT INTO STREAM_DEMO VALUES(1);
 

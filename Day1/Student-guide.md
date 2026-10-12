@@ -1,5 +1,7 @@
 # Day 1 — Build and operate the order-event pipeline
 
+Open [Pipeline progression](Pipeline-progression.md) alongside the scripts to follow the objects and connections added by each lab.
+
 ## Working agreement
 
 For each numbered step: instructor explains the purpose, executes it, pauses; everyone executes the same statements in their own identical environment; compare the checkpoint; discuss the result. SQL comments are the primary lab narrative. Do not Run All across asynchronous checkpoints. There is no instructor-only data generator.

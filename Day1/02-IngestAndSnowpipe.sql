@@ -8,6 +8,8 @@
 
 -- 02 | Internal stage -> Bronze, replay, Snowpipe
 
+-- Diagram: Pipeline-progression.md, Lab 02 - File ingestion into Bronze.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;

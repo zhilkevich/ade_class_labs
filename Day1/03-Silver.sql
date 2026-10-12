@@ -9,6 +9,8 @@
 
 -- 03 | Develop, inspect, then make Silver processing reusable.
 
+-- Diagram: Pipeline-progression.md, Lab 03 - Bronze to current Silver state.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
