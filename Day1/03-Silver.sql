@@ -185,9 +185,29 @@ SELECT *
 FROM CLASSIFIED_EVENTS
 WHERE reject_reason IS NOT NULL;
 
--- An immutable event_id must not identify different valid payloads.
--- The two e2 deliveries are identical, so they are not a conflict.
--- This SELECT should return no rows. An empty conflict result is expected.
+-- Find conflicting reuse of an event_id, not ordinary duplicate deliveries.
+-- event_id identifies ONE immutable business event. Re-delivering that same
+-- event is allowed; changing its content while keeping its ID is not.
+--
+-- Example A: e2 / o2 / version 1 / amount 50 arrives twice, same full payload.
+-- There are 2 deliveries but only 1 DISTINCT payload: no conflict is returned.
+-- Example B: e2 / o2 / version 1 / amount 50 and the same e2 with amount 60.
+-- There are 2 DISTINCT payloads for one ID: return e2 and stop processing.
+-- Example C: o2 changes from version 1 to version 2 under a NEW event_id.
+-- That is a normal state-change event, not a conflict with the earlier event.
+--
+-- WHERE: include only rows that passed the business validation rules.
+-- Invalid rows remain in REJECTED_EVENTS and are not checked by this query.
+-- GROUP BY: collect deliveries of the same event_id, not of the same order_id.
+-- TO_JSON: represent each payload as text for this classroom comparison.
+-- COUNT(DISTINCT ...): count different payload representations, not deliveries.
+-- HAVING > 1: keep IDs whose valid deliveries disagree about event content.
+-- File name, row number and scan time are outside payload and are not compared.
+--
+-- The fixture contains an identical e2 replay, so expect NO conflict rows.
+-- Production limitation: TO_JSON does not guarantee JSON object key order.
+-- A general implementation needs a defined canonical comparison of event content.
+-- Source: https://docs.snowflake.com/en/sql-reference/functions/to_json
 
 SELECT event_id
 FROM CLASSIFIED_EVENTS
@@ -203,6 +223,10 @@ CREATE OR REPLACE VIEW REJECTED_EVENTS AS
 SELECT *
 FROM CLASSIFIED_EVENTS
 WHERE reject_reason IS NOT NULL;
+
+-- Reuse the conflict check reviewed above. This view lists conflicting event IDs;
+-- it neither removes duplicates nor chooses which conflicting payload is correct.
+-- APPLY_EVENTS checks this view and rolls back if any conflict is present.
 
 CREATE OR REPLACE VIEW EVENT_CONFLICTS AS
 SELECT event_id
