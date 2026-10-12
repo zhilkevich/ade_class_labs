@@ -1,19 +1,65 @@
 /*----------------Snowflake Advanced 3-day class Lab:-------------------------------
 -- Copyright © 2026 Innovation In Software Corporation. All rights reserved.
-1) Classify valid and rejected events
-2) Maintain the latest order state with deterministic precedence
-3) Consume a stream transactionally and verify repeat execution
+1) Inspect real rows and develop each SELECT before creating its view
+2) Run the processing statements individually and demonstrate ROLLBACK
+3) Combine the verified steps into APPLY_EVENTS and commit the real result
+4) Repeat execution and verify that the accepted state remains unchanged
 ----------------------------------------------------------------------------------*/
 
--- 03 | Typed Silver, rejects, deterministic current state
+-- 03 | Develop, inspect, then make Silver processing reusable.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
 USE SCHEMA SILVER;
 
-CREATE TABLE EVENT_INBOX LIKE BRONZE.EVENTS_RAW;
+-- Run one statement or commented group at a time in the SAME worksheet/session.
+-- Pause at each result. The first-pass checkpoints assume the eight raw rows
+-- from Lab 02, an empty Silver inbox, and an unconsumed Bronze stream.
+-- Tables use IF NOT EXISTS so rerunning setup preserves data and stream progress.
+-- On a later rerun, compare with your starting counts; do not delete accepted data.
+-- Views and the procedure use OR REPLACE to update reusable definitions.
+-- No tasks should be processing this same inbox while we demonstrate transactions.
 
-CREATE VIEW TYPED_EVENTS AS
+-- ──────────────────────────────────────────────────────────────────────────────
+-- STEP 1: Create the inbox and record the starting state.
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- The inbox is durable delivery history. Rejected data remains explainable.
+-- LIKE gives it the same payload and lineage columns as the Bronze destination.
+
+CREATE TABLE IF NOT EXISTS EVENT_INBOX LIKE BRONZE.EVENTS_RAW;
+
+SELECT COUNT(*) AS raw_rows FROM BRONZE.EVENTS_RAW;
+
+SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+
+SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+
+-- CHECKPOINT on the first pass: raw_rows = 8, inbox_rows = 0, pending_rows = 8.
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- STEP 2: Try the typed SELECT with real input, then create the view.
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- Temporarily populate the inbox so the SELECT returns real event rows.
+-- We will roll this INSERT back before creating the view.
+-- DDL such as CREATE VIEW implicitly commits an open transaction in Snowflake.
+-- Never execute DDL between this BEGIN TRANSACTION and its ROLLBACK.
+-- Source: https://docs.snowflake.com/en/sql-reference/transactions
+
+BEGIN TRANSACTION;
+
+INSERT INTO SILVER.EVENT_INBOX (payload, source_file, source_row, scan_time)
+SELECT payload, source_file, source_row, scan_time FROM BRONZE.EVENTS_STREAM;
+
+SELECT payload:event_id::STRING AS event_id, source_file FROM EVENT_INBOX;
+
+-- First inspect the conversion query itself. Safe conversions return NULL
+-- for unsuitable values instead of making the whole query fail.
+-- Expect eight deliveries, including two e2 rows. For e3, amount becomes NULL.
+-- That is a conversion result to classify, rather than an empty dataset.
+
 SELECT
     payload,
     source_file,
@@ -29,7 +75,53 @@ SELECT
     payload:region::STRING region
 FROM EVENT_INBOX;
 
-CREATE VIEW CLASSIFIED_EVENTS AS
+-- Discuss the result before turning the query into a reusable view.
+-- End the trial transaction first: inbox rows and stream progress do not commit.
+
+ROLLBACK;
+
+SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+
+SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+
+-- CHECKPOINT on the first pass: inbox_rows = 0, pending_rows = 8.
+
+-- The view now stores the SELECT we have just inspected. It stores no rows.
+
+CREATE OR REPLACE VIEW TYPED_EVENTS AS
+SELECT
+    payload,
+    source_file,
+    source_row,
+    scan_time,
+    
+    NULLIF(TRIM(payload:event_id::STRING),'') event_id,
+    NULLIF(TRIM(payload:order_id::STRING),'') order_id,
+    TRY_TO_DECIMAL(payload:version::STRING, 38, 9) version,
+    TRY_TO_TIMESTAMP_TZ(payload:event_time::STRING) event_time,
+    payload:status::STRING status,
+    TRY_TO_DECIMAL(payload:amount::STRING, 12, 2) amount,
+    payload:region::STRING region
+FROM EVENT_INBOX;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- STEP 3: Try the classification SELECT, then create the view.
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- Populate the inbox again inside a new trial transaction.
+-- The typed view reads these uncommitted rows in this same session.
+
+BEGIN TRANSACTION;
+
+INSERT INTO SILVER.EVENT_INBOX (payload, source_file, source_row, scan_time)
+SELECT payload, source_file, source_row, scan_time FROM BRONZE.EVENTS_STREAM;
+
+SELECT event_id, version, amount FROM TYPED_EVENTS ORDER BY event_id;
+
+-- The CASE expression applies the business contract to the typed values.
+-- Expect e3 to have BAD_AMOUNT; the other seven deliveries have no rejection.
+-- An identical duplicate is valid input here; latest-state selection comes later.
+
 SELECT
     *,
     CASE
@@ -43,19 +135,70 @@ SELECT
     END AS reject_reason
 FROM TYPED_EVENTS;
 
-CREATE VIEW REJECTED_EVENTS AS
-SELECT *
-FROM CLASSIFIED_EVENTS
-WHERE reject_reason IS NOT NULL;
--- A conflicting payload for the same event ID must block this toy pipeline.
--- The lab never resolves conflicting immutable events by choosing a random row.
-CREATE VIEW EVENT_CONFLICTS AS
+ROLLBACK;
+
+-- The reviewed CASE query becomes the classification view, outside the transaction.
+
+CREATE OR REPLACE VIEW CLASSIFIED_EVENTS AS
+SELECT
+    *,
+    CASE
+        WHEN event_id IS NULL OR order_id IS NULL THEN 'MISSING_KEY'
+        WHEN version IS NULL OR version < 1 OR version <> TRUNC(version) THEN 'BAD_VERSION'
+        WHEN event_time IS NULL THEN 'BAD_TIME'
+        WHEN status IS NULL OR status NOT IN ('PLACED','PAID','CANCELLED') THEN 'BAD_STATUS'
+        WHEN amount IS NULL OR amount < 0 THEN 'BAD_AMOUNT'
+        WHEN region IS NULL OR region NOT IN ('US','EU') THEN 'BAD_REGION'
+        ELSE NULL
+    END AS reject_reason
+FROM TYPED_EVENTS;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- STEP 4: Inspect rejected rows and immutable-event conflicts, then create views.
+-- ──────────────────────────────────────────────────────────────────────────────
+
+BEGIN TRANSACTION;
+
+INSERT INTO SILVER.EVENT_INBOX (payload, source_file, source_row, scan_time)
+SELECT payload, source_file, source_row, scan_time FROM BRONZE.EVENTS_STREAM;
+
+-- Start with a short inspection query: expect e3 / BAD_AMOUNT.
+
+SELECT event_id, reject_reason FROM CLASSIFIED_EVENTS WHERE reject_reason IS NOT NULL;
+
+-- Review the full-row filter we will reuse as REJECTED_EVENTS.
+
+SELECT * FROM CLASSIFIED_EVENTS WHERE reject_reason IS NOT NULL;
+
+-- An immutable event_id must not identify different valid payloads.
+-- The two e2 deliveries are identical, so they are not a conflict.
+-- This SELECT should return no rows. An empty conflict result is expected.
+
 SELECT event_id
 FROM CLASSIFIED_EVENTS
 WHERE reject_reason IS NULL
 GROUP BY event_id HAVING COUNT(DISTINCT TO_JSON(payload)) > 1;
 
-CREATE TABLE ORDERS_CURRENT
+ROLLBACK;
+
+-- Create each view only after checking its SELECT; there is no open transaction.
+
+CREATE OR REPLACE VIEW REJECTED_EVENTS AS
+SELECT * FROM CLASSIFIED_EVENTS WHERE reject_reason IS NOT NULL;
+
+CREATE OR REPLACE VIEW EVENT_CONFLICTS AS
+SELECT event_id
+FROM CLASSIFIED_EVENTS
+WHERE reject_reason IS NULL
+GROUP BY event_id HAVING COUNT(DISTINCT TO_JSON(payload)) > 1;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- STEP 5: Run the processing statements manually, inspect the result, then roll back.
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- Create the target before opening the trial transaction; preserve any existing rows.
+
+CREATE TABLE IF NOT EXISTS ORDERS_CURRENT
 (
     order_id STRING,
     event_id STRING,
@@ -66,12 +209,117 @@ CREATE TABLE ORDERS_CURRENT
     region STRING
 );
 
+SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+
+SELECT COUNT(*) AS current_orders FROM ORDERS_CURRENT;
+
+SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+
+-- Record these baseline counts: 0 / 0 / 8 on the first pass.
+
+BEGIN TRANSACTION;
+
+INSERT INTO SILVER.EVENT_INBOX (payload, source_file, source_row, scan_time)
+SELECT payload, source_file, source_row, scan_time FROM BRONZE.EVENTS_STREAM;
+
+SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+
+-- Verify conflicts before making target changes: expect conflicts = 0.
+-- If it is not zero, execute ROLLBACK and stop. Do not continue to MERGE.
+
+SELECT COUNT(*) AS conflicts FROM EVENT_CONFLICTS;
+
+-- Inspect the candidate SELECT before embedding it in MERGE.
+-- It chooses one valid latest state per order from the preserved inbox history.
+-- Expect o1/e4/v2/PAID/120, o2/e5/v2/CANCELLED/50, o3/e6/v2/PLACED/30.
+-- A lower-version late arrival cannot resurrect a cancelled order.
+-- Equal versions use event_time then event_id as a documented classroom rule.
+-- Production contracts should reject ambiguous versions instead of lexical ties.
+
+SELECT order_id, event_id, version, event_time, status, amount, region
+FROM CLASSIFIED_EVENTS
+WHERE reject_reason IS NULL
+QUALIFY ROW_NUMBER() OVER
+(
+    PARTITION BY order_id
+    ORDER BY version DESC, event_time DESC, event_id DESC,
+             source_file, source_row
+) = 1;
+
+-- Use those candidates in MERGE. A new order is inserted; a higher-priority
+-- state updates the existing order. An older state cannot overwrite a newer one.
+-- The small teaching implementation ranks inbox history.
+-- Affected-order processing is a production extension.
+
+MERGE INTO SILVER.ORDERS_CURRENT t
+USING
+(
+    SELECT order_id, event_id, version, event_time, status, amount, region
+    FROM SILVER.CLASSIFIED_EVENTS
+    WHERE reject_reason IS NULL
+    QUALIFY ROW_NUMBER() OVER
+    (
+        PARTITION BY order_id
+        ORDER BY version DESC, event_time DESC, event_id DESC,
+                 source_file, source_row
+    ) = 1
+) s
+ON t.order_id = s.order_id
+
+WHEN MATCHED AND
+(
+    s.version > t.version
+    OR (s.version = t.version AND s.event_time > t.event_time)
+    OR (s.version = t.version AND s.event_time = t.event_time
+        AND s.event_id > t.event_id)
+)
+THEN UPDATE SET
+    event_id = s.event_id,
+    version = s.version,
+    event_time = s.event_time,
+    status = s.status,
+    amount = s.amount,
+    region = s.region
+
+WHEN NOT MATCHED THEN
+    INSERT (order_id, event_id, version, event_time, status, amount, region)
+    VALUES (s.order_id, s.event_id, s.version, s.event_time,
+            s.status, s.amount, s.region);
+
+SELECT * FROM ORDERS_CURRENT ORDER BY order_id;
+
+SELECT event_id, reject_reason FROM REJECTED_EVENTS;
+
+-- The three current rows and e3 / BAD_AMOUNT are visible inside this transaction.
+
+-- Now undo the trial. ROLLBACK removes its inbox/target changes and leaves
+-- the stream offset unchanged. Existing baseline data, if any, is preserved.
+
+ROLLBACK;
+
+SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+
+SELECT COUNT(*) AS current_orders FROM ORDERS_CURRENT;
+
+SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+
+-- CHECKPOINT: the three counts match the baseline recorded before BEGIN.
+-- On the first pass: inbox_rows = 0, current_orders = 0, pending_rows = 8.
+-- Deleting target rows after COMMIT would not rewind a consumed stream offset.
+-- That is why this processing demonstration uses ROLLBACK rather than cleanup DELETE.
+
 -- ──────────────────────────────────────────────────────────────────────────────
--- STEP 1: A transaction couples stream consumption with the Silver update.
+-- STEP 6: Combine the verified steps into a reusable stored procedure.
 -- ──────────────────────────────────────────────────────────────────────────────
--- Stream rows enter a durable inbox; rejected records remain explainable.
--- The small teaching implementation ranks inbox history. Affected-order processing is a production extension.
-CREATE PROCEDURE APPLY_EVENTS()
+
+-- We have inspected INSERT, conflict detection, candidate selection and MERGE.
+-- The procedure combines the same processing steps with a conflict guard.
+-- On success it COMMITs both the Silver writes and stream consumption.
+-- On an exception it ROLLBACKs and re-raises the error.
+-- Create the procedure outside any explicit transaction. It owns its transaction.
+-- EXECUTE AS OWNER supplies the owner's privileges to the controlled operation.
+
+CREATE OR REPLACE PROCEDURE APPLY_EVENTS()
 RETURNS STRING
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -85,11 +333,9 @@ BEGIN
 
     -- Capture deliveries and consume the stream only if the transaction commits.
     INSERT INTO SILVER.EVENT_INBOX
-    SELECT payload, source_file, source_row, scan_time
-    FROM BRONZE.EVENTS_STREAM;
+    SELECT payload, source_file, source_row, scan_time FROM BRONZE.EVENTS_STREAM;
 
-    SELECT COUNT(*) INTO :conflicts
-    FROM SILVER.EVENT_CONFLICTS;
+    SELECT COUNT(*) INTO :conflicts FROM SILVER.EVENT_CONFLICTS;
 
     IF (conflicts > 0) THEN
         RAISE bad_event;
@@ -132,37 +378,44 @@ BEGIN
                 s.status, s.amount, s.region);
 
     COMMIT;
+
     RETURN 'Applied';
 
 EXCEPTION
         WHEN OTHER THEN
         ROLLBACK;
+
         RAISE;
+
 END;
 $$;
 
+-- ──────────────────────────────────────────────────────────────────────────────
+-- STEP 7: Call the procedure, verify the committed result, then repeat.
+-- ──────────────────────────────────────────────────────────────────────────────
+
 CALL APPLY_EVENTS();
 
-SELECT *
-FROM ORDERS_CURRENT
-ORDER BY order_id;
+SELECT * FROM ORDERS_CURRENT ORDER BY order_id;
 
--- ──────────────────────────────────────────────────────────────────────────────
 -- CHECKPOINT: o1/e4/v2/PAID/120; o2/e5/v2/CANCELLED/50; o3/e6/v2/PLACED/30.
--- ──────────────────────────────────────────────────────────────────────────────
-SELECT
-    event_id,
-    reject_reason
-FROM REJECTED_EVENTS; -- e3 / BAD_AMOUNT
-SELECT COUNT(*)
-FROM BRONZE.EVENTS_STREAM; -- 0
--- ──────────────────────────────────────────────────────────────────────────────
--- STEP 2: Call again; inbox stays 8 and current orders stays 3.
--- ──────────────────────────────────────────────────────────────────────────────
+
+SELECT event_id, reject_reason FROM REJECTED_EVENTS;
+
+SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+
+SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+
+-- CHECKPOINT on the first pass: e3 / BAD_AMOUNT; inbox_rows = 8; pending_rows = 0.
+
+-- Call again with no new deliveries. The accepted state should remain unchanged.
+
 CALL APPLY_EVENTS();
 
-SELECT COUNT(*)
-FROM EVENT_INBOX;
--- A lower-version late arrival cannot resurrect a cancelled order.
--- Equal versions use event_time then event_id as a documented classroom rule.
--- Production contracts should reject ambiguous versions instead of lexical ties.
+SELECT COUNT(*) AS inbox_rows FROM EVENT_INBOX;
+
+SELECT COUNT(*) AS current_orders FROM ORDERS_CURRENT;
+
+SELECT COUNT(*) AS pending_rows FROM BRONZE.EVENTS_STREAM;
+
+-- CHECKPOINT on the first pass: inbox_rows = 8, current_orders = 3, pending_rows = 0.

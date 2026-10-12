@@ -8,6 +8,10 @@ For each numbered step: instructor explains the purpose, executes it, pauses; ev
 
 Run SetUp/00, then 01 → 02 → 03 → 04 → 05 → 06. The Snowpark/deployment exercise is part of Day 1. Run 05 before 06 because acceptance expects ten deliveries; 06 adds a distinct eleventh replay delivery. Use Course-runbook.md for the revised proposed day schedule, including Snowpark and deployment time. Teaching durations have not yet been timed with a class.
 
+## Lab 03 — develop the queries before making them reusable
+
+The revised sequence first populates the inbox inside trial transactions so each conversion, classification and conflict SELECT has real data to inspect. Roll back each trial before creating its view: CREATE VIEW implicitly commits an open transaction. Then inspect the latest-state candidates and run MERGE manually inside a trial transaction. Compare the visible result, roll back and verify that the starting inbox/target counts and stream availability are restored. Finally create APPLY_EVENTS from the verified steps, call it to commit processing, and call it again to check repeat execution. Use the same worksheet/session throughout each trial. A cleanup DELETE after committing would not restore a consumed stream offset.
+
 ## Project and expected results
 
 Bronze holds immutable raw event payloads plus file lineage. Silver retains consumed input, classifies quality failures and maintains one latest state per order. Gold groups active order value by region. Cancellation stays in Silver as a tombstone and is excluded from Gold. This is current order value, not recognized revenue.
