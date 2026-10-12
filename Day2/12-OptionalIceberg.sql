@@ -6,6 +6,8 @@ D1 — Optional prevalidated Iceberg observation
 3) Compare a REST-catalog client against the same snapshot
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 12 - Optional Iceberg interoperability.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;

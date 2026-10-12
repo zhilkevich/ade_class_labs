@@ -6,6 +6,8 @@ C6 — Dynamic Gold and actual refresh evidence
 3) Reconcile task-maintained state with Dynamic Table results
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 08 - Declarative Dynamic Gold.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;

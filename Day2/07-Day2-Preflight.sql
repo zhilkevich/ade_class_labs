@@ -6,6 +6,8 @@ Day 2 preflight — verify the shared handoff
 3) Record account capabilities for governed Gold
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 07 - Verify the handoff.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;

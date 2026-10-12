@@ -6,6 +6,8 @@ C8 — Data quality and pipeline observability
 3) Observe scheduled metric evidence and stop serverless monitoring
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 10 - Quality and observability.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
@@ -14,6 +16,11 @@ USE SCHEMA OPS;
 ALTER SESSION SET TIMEZONE = 'UTC';
 
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY2';
+
+-- SETUP: define a separate quality-test destination before creating metrics.
+-- The metric will inspect this table; it must never damage the course orders.
+
+CREATE TABLE OPS.DQ_DEMO (AMOUNT NUMBER(12, 2));
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 1 │ Run immediate SQL quality controls
@@ -68,8 +75,6 @@ SELECT GOVERNANCE.NEGATIVE_AMOUNT_COUNT(
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- Never damage the course orders merely to make a monitoring result interesting.
-
-CREATE TABLE OPS.DQ_DEMO (AMOUNT NUMBER(12, 2));
 
 INSERT INTO OPS.DQ_DEMO VALUES (10), (-5), (NULL);
 

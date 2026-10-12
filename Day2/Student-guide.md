@@ -1,5 +1,7 @@
 # Day 2 — Governed and observable Gold
 
+Open [Pipeline progression](Pipeline-progression.md) alongside the scripts to follow the objects and connections added by each lab.
+
 Work in your own course account. The instructor executes a numbered step; everyone repeats that step and checks its result before continuing. Select statement groups rather than executing the entire course as one batch. Scheduled operations require an explicit wait for evidence.
 
 ## Before starting

@@ -6,6 +6,8 @@ C7 — Governed Gold with explicit role tests
 3) Verify positive and negative access under isolated roles
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 09 - Governed consumption boundary.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;

@@ -6,6 +6,8 @@ C9 — Consume governed Gold without widening access
 3) Prepare a narrowly owned hosted app and a safe share extension
 ----------------------------------------------------------------------------------*/
 
+-- Diagram: Pipeline-progression.md, Lab 11 - Consumers.
+
 USE ROLE ADV_LAB;
 USE WAREHOUSE ADV_WH;
 USE DATABASE ADV_ORDERS;
