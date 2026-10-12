@@ -17,7 +17,8 @@ Add the repeatable event fixture, JSON file format and internal stage. No Bronze
 ## Lab 02 - File ingestion into Bronze
 
 ```text
-EVENTS_STAGE / batch1 -- COPY INTO ------------------+
+EVENTS_STAGE / batch1 -- COPY INTO -----------------+
+													|
                                                     v
 EVENTS_STAGE / batch2 -- ORDERS_PIPE ------------> EVENTS_RAW
                          ^                          |
@@ -41,11 +42,12 @@ EVENTS_RAW -> EVENTS_STREAM -- INSERT --> EVENT_INBOX
                                      CLASSIFIED_EVENTS
                                        /    |     \
                                       v     v      v
-                             REJECTED_EVENTS |  EVENT_CONFLICTS
+                             REJECTED_EVENTS|  EVENT_CONFLICTS
                                             |
                                 valid latest candidate / order
                                             |
                                           MERGE
+										    |
                                             v
                                       ORDERS_CURRENT
 
@@ -90,7 +92,7 @@ STREAM_DEMO -> STREAM_DEMO_CHANGES -> STREAM_DEMO_SINK
                            INSERT inside BEGIN ... ROLLBACK
 ```
 
-Add disposable demonstration tables and their stream at the start. Acceptance checks the actual pipeline; rollback practice uses separate objects. After rollback the demonstration stream still exposes its one inserted row and the sink has zero rows. No new business-processing stage is added. Run before Lab 06: acceptance expects raw/inbox=10.
+Part A states the expected data, shows expected/actual control totals and uses INTERSECT to display all matching rows: 3 current orders, 1 Gold row and 1 rejected event. Row-count controls must also pass, because INTERSECT alone does not expose extra actual rows. Part B is a separate helper demonstration; create its disposable tables and stream immediately before that demonstration, after acceptance. After rollback the demonstration stream still exposes its one inserted row and the sink has zero rows. No new business-processing stage is added. Run before Lab 06: acceptance expects raw/inbox=10.
 
 ## Lab 06 - Snowpark implementation and deployment
 
@@ -119,6 +121,6 @@ Define reference, transformed-event and candidate tables before filling or proce
 
 ## Table-first teaching sequence
 
-Inspect existing inputs, define known base-table destinations, then develop connections and processing. Create views and procedures as their SELECTs and DML become understood. CTAS, Dynamic Tables and materialized views combine definition with population/maintenance and remain at the first step that has their required inputs. Disposable fixtures remain separate from the business project.
+Inspect existing inputs, define known base-table destinations, then develop connections and processing. Create views and procedures as their SELECTs and DML become understood. CTAS, Dynamic Tables and materialized views combine definition with population/maintenance and remain at the first step that has their required inputs. Disposable fixtures remain separate from the business project. Lab 05 is an explicit exception: its helper objects are created only when the separate demonstration begins.
 
 Copyright © 2026 Innovation In Software Corporation. All rights reserved.

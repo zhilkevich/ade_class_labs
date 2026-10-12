@@ -14,6 +14,10 @@ Run SetUp/00, then 01 → 02 → 03 → 04 → 05 → 06. The Snowpark/deploymen
 
 Start by inspecting Bronze events and creating both known Silver tables: EVENT_INBOX for delivery history and ORDERS_CURRENT for the current-state contract consumed by Gold. With the destination established, develop the processing that populates it. The sequence then populates the inbox inside trial transactions so each conversion, classification and conflict SELECT has real data to inspect. Roll back each trial before creating its view: CREATE VIEW implicitly commits an open transaction. Then inspect the latest-state candidates and run MERGE manually inside a trial transaction. Compare the visible result, roll back and verify that the starting inbox/target counts and stream availability are restored. Finally create APPLY_EVENTS from the verified steps, call it to commit processing, and call it again to check repeat execution. Use the same worksheet/session throughout each trial. A cleanup DELETE after committing would not restore a consumed stream offset.
 
+## Lab 05 - acceptance, then a separate helper demonstration
+
+Part A first states the expected pipeline data. Compare expected and actual control totals: all eight controls must pass. INTERSECT then displays three matching current-order rows, one Gold row (US / 2 / 165), and one rejected event (e3 / BAD_AMOUNT). Require both the matching rows and the total-row controls; extra or duplicate actual rows can otherwise be hidden by INTERSECT. Run after Lab 04 finishes and before Lab 06 adds its replay. Part B is a separately titled rollback demonstration using disposable objects, created immediately before it. It does not change the order pipeline.
+
 ## Project and expected results
 
 Bronze holds immutable raw event payloads plus file lineage. Silver retains consumed input, classifies quality failures and maintains one latest state per order. Gold groups active order value by region. Cancellation stays in Silver as a tombstone and is excluded from Gold. This is current order value, not recognized revenue.
