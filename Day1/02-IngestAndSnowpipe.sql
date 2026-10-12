@@ -12,6 +12,41 @@ USE DATABASE ADV_ORDERS;
 USE SCHEMA BRONZE;
 
 -- ──────────────────────────────────────────────────────────────────────────────
+-- STEP 0: Create the Bronze destination and its change-tracking stream.
+-- ──────────────────────────────────────────────────────────────────────────────
+-- IF NOT EXISTS makes object creation repeatable without deleting loaded data
+-- or resetting the stream offset. It also preserves an existing pipe's history.
+-- Existing objects keep their definitions; this is not a schema migration.
+-- In a fresh environment, create both objects before the first load.
+-- STEP 2 repeats COPY to demonstrate file replay. Counts below describe the
+-- first pass; later runs retain the data and processing position already reached.
+
+CREATE TABLE IF NOT EXISTS EVENTS_RAW
+(
+    payload VARIANT,
+    source_file STRING,
+    source_row NUMBER,
+    scan_time TIMESTAMP_LTZ
+);
+
+-- APPEND-ONLY STREAM REFRESHER
+-- EVENTS_RAW preserves delivered payloads and their file/scan lineage.
+-- The append-only stream exposes inserted rows after its current offset;
+-- it does not report source UPDATE or DELETE operations.
+-- Our Bronze layer receives inserts, including duplicate event deliveries.
+-- A stream tracks source changes, not business-event uniqueness.
+-- Create it BEFORE COPY/Snowpipe inserts so those rows are available to Silver.
+-- A SELECT inspects pending rows without advancing the offset.
+-- Committed DML using the stream consumes its changes; Lab 03 demonstrates
+-- transactional consumption into the durable Silver inbox.
+CREATE STREAM IF NOT EXISTS EVENTS_STREAM
+    ON TABLE EVENTS_RAW
+    APPEND_ONLY = TRUE;
+
+SELECT COUNT(*) AS pending_rows
+FROM EVENTS_STREAM; -- 0 on a fresh first pass; reruns preserve the current offset
+
+-- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 1: Inspect semi-structured records and file lineage before loading.
 -- ──────────────────────────────────────────────────────────────────────────────
 SELECT
@@ -32,9 +67,9 @@ FROM
 FILE_FORMAT = (FORMAT_NAME = 'EVENTS_JSON');
 
 SELECT COUNT(*) AS raw_rows
-FROM EVENTS_RAW; -- expected 4
+FROM EVENTS_RAW; -- 4 on the first pass; 8 if batch2 was already loaded
 -- ──────────────────────────────────────────────────────────────────────────────
--- STEP 2: Repeat the exact COPY above. Expect raw_rows still 4.
+-- STEP 2: Repeat the exact COPY above. Expect the existing raw count unchanged.
 -- ──────────────────────────────────────────────────────────────────────────────
 -- File-load history is NOT business-key deduplication: e2 still occurs twice.
 SELECT
@@ -47,7 +82,7 @@ ORDER BY 1;
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 3: Define Snowpipe for the second batch only; do NOT bulk COPY batch2.
 -- ──────────────────────────────────────────────────────────────────────────────
-CREATE PIPE ORDERS_PIPE
+CREATE PIPE IF NOT EXISTS ORDERS_PIPE
     AUTO_INGEST = FALSE
 AS
 COPY INTO ADV_ORDERS.BRONZE.EVENTS_RAW
@@ -88,6 +123,6 @@ FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 -- deliberately abandons this pipe branch before bulk loading batch2.
 -- Parseable JSON can still violate business rules (e3). Bronze preserves it.
 SELECT COUNT(*) AS pending_rows
-FROM EVENTS_STREAM; -- 8 before consumption
+FROM EVENTS_STREAM; -- 8 before Lab 03 consumes them; 0 after its successful commit
 SELECT COUNT(*) AS pending_rows
-FROM EVENTS_STREAM; -- still 8
+FROM EVENTS_STREAM; -- unchanged by the preceding SELECT

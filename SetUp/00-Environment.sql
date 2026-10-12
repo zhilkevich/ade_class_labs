@@ -29,7 +29,9 @@ CREATE WAREHOUSE ADV_WH
  
 CREATE DATABASE ADV_ORDERS;
 
-GRANT OWNERSHIP ON DATABASE ADV_ORDERS TO ROLE ADV_LAB COPY CURRENT GRANTS;
+GRANT OWNERSHIP ON DATABASE ADV_ORDERS TO ROLE ADV_LAB 
+COPY CURRENT GRANTS; --Preserves existing grants on that database during the ownership transfer.
+
 GRANT USAGE, OPERATE ON WAREHOUSE ADV_WH TO ROLE ADV_LAB;
 GRANT EXECUTE TASK ON ACCOUNT TO ROLE ADV_LAB;
 
@@ -46,7 +48,10 @@ CREATE SCHEMA GOLD;
 CREATE SCHEMA OPS;
 
 ALTER SESSION SET TIMEZONE='UTC';
+
 ALTER SESSION SET QUERY_TAG='ADV_2026_DAY1';
+-- This assigns the label ADV_2026_DAY1 to subsequent SQL statements executed in your current Snowflake session. 
+-- Snowflake records that label in the QUERY_TAG column of query history, so you can find and group those statements later.
 
 SELECT
     CURRENT_ACCOUNT(),
@@ -59,3 +64,26 @@ SELECT
 -- ──────────────────────────────────────────────────────────────────────────────
 -- CREATE intentionally fails on reused names. Do not replace a live lab database.
 -- For another rehearsal use a fresh isolated environment; see reset instructions.
+
+SHOW ACCOUNTS ->>
+SELECT *
+FROM (
+  SELECT "organization_name", "account_name", "organization_name" || '-' || "account_name" as "account_id", 
+         "account_locator", "account_url", "account_locator_url", current_user() as "user_name", 
+         'https://app.snowflake.com/' || LOWER("organization_name") || '/' || LOWER("account_name") AS "snowsight_url",
+         REGEXP_REPLACE("snowflake_region", '^AWS_([A-Z]+)_([A-Z]+)_([0-9]+)$', '\\1-\\2-\\3') AS "account_region"
+  FROM $1
+)
+UNPIVOT (
+  value FOR key IN (
+    "organization_name",
+    "account_name",
+    "account_id",
+    "account_locator",
+    "account_region",
+    "account_url",
+    "account_locator_url",
+    "snowsight_url",
+    "user_name"
+  )
+);
