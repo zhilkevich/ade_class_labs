@@ -18,6 +18,18 @@ Start by inspecting Bronze events and creating both known Silver tables: EVENT_I
 
 Part A first states the expected pipeline data. Compare expected and actual control totals: all eight controls must pass. INTERSECT then displays three matching current-order rows, one Gold row (US / 2 / 165), and one rejected event (e3 / BAD_AMOUNT). Require both the matching rows and the total-row controls; extra or duplicate actual rows can otherwise be hidden by INTERSECT. Run after Lab 04 finishes and before Lab 06 adds its replay. Part B is a separately titled rollback demonstration using disposable objects, created immediately before it. It does not change the order pipeline.
 
+## Lab 06 - develop Snowpark in a notebook, then deploy
+
+1. Run **Part A only** of `06-SnowparkAndDeployment.sql`: establish the three destinations and region reference.
+2. Import/open `06-Snowpark-Development.ipynb` in Snowflake. Follow its runtime, role, warehouse and package instructions; instructor and students execute the same cells.
+3. Inspect typed columns, rejection rules, reference join, event deduplication and latest-state windows. Show three matches with the SQL baseline, then try scratch-table writes and Snowpark MERGE in one transaction that always rolls back.
+4. Assemble the same functions into `main`, without calling it in the development notebook. Return to SQL **Part B** to create/call the Python 3.12 stored procedure. Snowpark is unpinned; deployment resolves an available package version at creation. Inspect the resolved dependency.
+5. Run SQL **Part C** to switch the existing task graph to this procedure. Wait for asynchronous task completion and verify raw/inbox=11, current=3 and active value=165. The replay INSERT is guarded for repeat execution.
+
+`Snowpark-OrderTransform.py` is the complete reusable source; the deployment SQL embeds identical source. This is an alternative implementation of the established order contract, chosen to teach Snowpark APIs and the development-to-deployment workflow. SQL remains sufficient for this business example.
+
+Optional: `Snowpark-Pipeline.ipynb` omits development trials and invokes the handler once. `Optional-NotebookPipeline.sql` explains a separately gated notebook-task alternative. Do not enable two consumers of EVENTS_STREAM. Notebook import/runtime and headless execution must be rehearsed in the class account; handler tests do not certify notebook hosting. The optional task has no original audit child.
+
 ## Project and expected results
 
 Bronze holds immutable raw event payloads plus file lineage. Silver retains consumed input, classifies quality failures and maintains one latest state per order. Gold groups active order value by region. Cancellation stays in Silver as a tombstone and is excluded from Gold. This is current order value, not recognized revenue.

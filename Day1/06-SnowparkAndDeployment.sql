@@ -1,7 +1,7 @@
 /*----------------Snowflake Advanced 3-day class Lab:-------------------------------
 -- Copyright © 2026 Innovation In Software Corporation. All rights reserved.
-C3/C4 completion — Snowpark with the existing order contract
-1) Build a lazy transformation plan with tolerant casts, validation and a reference join
+Lab 06 - Notebook development, procedure deployment and orchestration
+1) Prepare targets, then develop Snowpark transformations cell by cell in a notebook
 2) Compare Snowpark output with the established SQL baseline
 3) Deploy the same source and invoke it through the existing task graph
 ----------------------------------------------------------------------------------*/
@@ -18,20 +18,20 @@ ALTER SESSION SET TIMEZONE = 'UTC';
 ALTER SESSION SET QUERY_TAG = 'ADV_2026_DAY1';
 
 -- ──────────────────────────────────────────────────────────────────────────────
--- STEP 1 │ Prepare stable transformation tables before any transaction
+-- PART A: SETUP - prepare destinations before opening the development notebook
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- The first five files establish 3 current orders and active value USD 165.
 -- SQL is a useful baseline; Snowpark implements the same contract.
 -- Python runs inside Snowflake, with the same setup for every student.
 
-CREATE TABLE SILVER.REGION_REFERENCE
+CREATE TABLE IF NOT EXISTS SILVER.REGION_REFERENCE
 (
     REGION_CODE  STRING,
     REGION_LABEL STRING
 );
 
-CREATE TABLE SILVER.SNOWPARK_EVENTS
+CREATE TABLE IF NOT EXISTS SILVER.SNOWPARK_EVENTS
 (
     EVENT_ID          STRING,
     ORDER_ID          STRING,
@@ -47,142 +47,187 @@ CREATE TABLE SILVER.SNOWPARK_EVENTS
     SOURCE_ROW        NUMBER
 );
 
-CREATE TABLE SILVER.SNOWPARK_CANDIDATES LIKE SILVER.ORDERS_CURRENT;
+CREATE TABLE IF NOT EXISTS SILVER.SNOWPARK_CANDIDATES LIKE SILVER.ORDERS_CURRENT;
 
 -- The three table definitions above establish the destinations before processing.
 -- REGION_REFERENCE enriches region labels; SNOWPARK_EVENTS holds classified
 -- deliveries; SNOWPARK_CANDIDATES holds one selected state per order.
 -- The handler joins, populates these tables and merges into existing ORDERS_CURRENT.
 
-INSERT INTO SILVER.REGION_REFERENCE VALUES
-    ('US', 'United States'),
-    ('EU', 'Europe');
+MERGE INTO SILVER.REGION_REFERENCE t
+USING (SELECT column1 AS region_code, column2 AS region_label
+       FROM VALUES ('US', 'United States'), ('EU', 'Europe')) s
+ON t.region_code = s.region_code
+WHEN MATCHED THEN UPDATE SET region_label = s.region_label
+WHEN NOT MATCHED THEN INSERT (region_code, region_label)
+VALUES (s.region_code, s.region_label);
 
--- Confirm the pinned package is available in every participant account.
--- Python3.12 / Snowpark1.55.1 was exercised on 2026-10-12; recheck before class.
+-- Query package versions available in this account; do not assume a fixed release.
+-- Package version is omitted in deployment: resolve latest available for Python 3.12.
 
-SELECT PACKAGE_NAME, VERSION
+SELECT package_name, version
 FROM SNOWFLAKE.INFORMATION_SCHEMA.PACKAGES
-WHERE LANGUAGE = 'python'
-  AND PACKAGE_NAME = 'snowflake-snowpark-python'
-  AND VERSION = '1.55.1';
+WHERE language = 'python'
+  AND package_name = 'snowflake-snowpark-python'
+ORDER BY TRY_TO_NUMBER(SPLIT_PART(version, '.', 1)) DESC,
+         TRY_TO_NUMBER(SPLIT_PART(version, '.', 2)) DESC,
+         TRY_TO_NUMBER(SPLIT_PART(version, '.', 3)) DESC;
 
--- ──────────────────────────────────────────────────────────────────────────────
--- STEP 2 │ Deploy the readable handler using SQL
--- ──────────────────────────────────────────────────────────────────────────────
+-- STOP HERE. Open 06-Snowpark-Development.ipynb and run it cell by cell.
+-- It develops the same functions used below. Return only after all checkpoints pass.
 
--- Snowpark-OrderTransform.py is the identical handler, suitable for a Python
--- worksheet with main as handler and String as return type. No local Python needed.
+-- ============================================================================
+-- PART B: DEPLOY - package the verified functions as a stored procedure.
+-- ============================================================================
+-- Snowpark-OrderTransform.py and the notebook contain this same reusable source.
+-- Unpinned packages resolve at CREATE time; calls reuse that resolved environment.
+-- Source: https://docs.snowflake.com/en/sql-reference/sql/create-procedure
 
-CREATE PROCEDURE SILVER.APPLY_EVENTS_SNOWPARK()
+CREATE OR REPLACE PROCEDURE SILVER.APPLY_EVENTS_SNOWPARK()
 RETURNS STRING
 LANGUAGE PYTHON
 RUNTIME_VERSION = '3.12'
-PACKAGES = ('snowflake-snowpark-python==1.55.1')
+PACKAGES = ('snowflake-snowpark-python')
 HANDLER = 'main'
 EXECUTE AS OWNER
 AS
 $$
-"""Snowpark current-order transformation; transaction and business state stay in Snowflake.
+"""Reusable Snowpark transformations for the Day 1 order-event pipeline.
 Copyright © 2026 Innovation In Software Corporation. All rights reserved.
 """
-from snowflake.snowpark.functions import col, lit, sql_expr, row_number
+from snowflake.snowpark.functions import (
+    col, sql_expr, row_number, when_matched, when_not_matched
+)
 from snowflake.snowpark.window import Window
 
+ORDER_COLUMNS = ["ORDER_ID", "EVENT_ID", "VERSION", "EVENT_TIME", "STATUS", "AMOUNT", "REGION"]
+EVENT_COLUMNS = ["EVENT_ID", "ORDER_ID", "VERSION", "EVENT_TIME", "STATUS", "AMOUNT",
+                 "REGION", "REGION_LABEL", "ACTIVE_AMOUNT_USD", "REJECT_REASON",
+                 "SOURCE_FILE", "SOURCE_ROW"]
+
+def type_events(raw):
+    # select_expr builds a DataFrame plan; it does not collect the event rows.
+    # Preserve fractional versions for validation before storing integer revisions.
+    return raw.select_expr(
+        "NULLIF(TRIM(payload:event_id::STRING), '') AS EVENT_ID",
+        "NULLIF(TRIM(payload:order_id::STRING), '') AS ORDER_ID",
+        "TRY_TO_DECIMAL(payload:version::STRING, 38, 9) AS VERSION",
+        "TRY_TO_TIMESTAMP_TZ(payload:event_time::STRING) AS EVENT_TIME",
+        "payload:status::STRING AS STATUS",
+        "TRY_TO_DECIMAL(payload:amount::STRING, 12, 2) AS AMOUNT",
+        "payload:region::STRING AS REGION",
+        "SOURCE_FILE", "SOURCE_ROW")
+
+def classify_events(typed):
+    # Reuse the business rules developed in SQL; express a new DataFrame column.
+    return typed.with_column("REJECT_REASON", sql_expr("""CASE
+        WHEN event_id IS NULL OR order_id IS NULL THEN 'MISSING_KEY'
+        WHEN version IS NULL OR version < 1 OR version <> TRUNC(version) THEN 'BAD_VERSION'
+        WHEN event_time IS NULL THEN 'BAD_TIME'
+        WHEN status IS NULL OR status NOT IN ('PLACED', 'PAID', 'CANCELLED') THEN 'BAD_STATUS'
+        WHEN amount IS NULL OR amount < 0 THEN 'BAD_AMOUNT'
+        WHEN region IS NULL OR region NOT IN ('US', 'EU') THEN 'BAD_REGION'
+        ELSE NULL END"""))
+
+def enrich_events(classified, reference):
+    enriched = classified.join(
+        reference, classified["REGION"] == reference["REGION_CODE"], "left")
+    return enriched.with_column(
+        "ACTIVE_AMOUNT_USD", sql_expr("IFF(status = 'CANCELLED', 0, amount)"))
+
+def select_candidates(enriched):
+    good = enriched.filter(col("REJECT_REASON").is_null())
+    # Pick a representative delivery of each immutable event; keep inbox history.
+    # File/row identifies delivery lineage, not business-state precedence.
+    unique = good.with_column("RN", row_number().over(
+        Window.partition_by("EVENT_ID").order_by(col("SOURCE_FILE"), col("SOURCE_ROW"))))
+    unique = unique.filter(col("RN") == 1).drop("RN")
+    # Now choose the latest business state using the same SQL precedence rule.
+    latest = unique.with_column("RN", row_number().over(
+        Window.partition_by("ORDER_ID").order_by(
+            col("VERSION").desc(), col("EVENT_TIME").desc(), col("EVENT_ID").desc())))
+    return latest.filter(col("RN") == 1).select(*ORDER_COLUMNS)
+
+def merge_current(session, candidates):
+    target = session.table("SILVER.ORDERS_CURRENT")
+    newer = (
+        (candidates["VERSION"] > target["VERSION"])
+        | ((candidates["VERSION"] == target["VERSION"])
+           & (candidates["EVENT_TIME"] > target["EVENT_TIME"]))
+        | ((candidates["VERSION"] == target["VERSION"])
+           & (candidates["EVENT_TIME"] == target["EVENT_TIME"])
+           & (candidates["EVENT_ID"] > target["EVENT_ID"]))
+    )
+    updates = {name: candidates[name] for name in ORDER_COLUMNS if name != "ORDER_ID"}
+    inserts = {name: candidates[name] for name in ORDER_COLUMNS}
+    # Table.merge is an action: Snowflake executes MERGE and returns row counts.
+    return target.merge(candidates, target["ORDER_ID"] == candidates["ORDER_ID"], [
+        when_matched(newer).update(updates),
+        when_not_matched().insert(inserts)
+    ])
+
 def main(session):
-    # STEP 1: consume the stream and couple all output DML in one transaction.
+    # Only SQL transaction control and stream capture remain session.sql calls.
+    # All destinations already exist; no DDL belongs inside this transaction.
     session.sql("BEGIN TRANSACTION").collect()
     try:
+        # Consume this stream into the inbox ONCE per transaction.
         session.sql("""INSERT INTO SILVER.EVENT_INBOX
             SELECT payload, source_file, source_row, scan_time
             FROM BRONZE.EVENTS_STREAM""").collect()
-
-        # STEP 2: tolerant casts preserve bad business data for diagnosis.
-        raw = session.table("SILVER.EVENT_INBOX")
-        typed = raw.select_expr(
-            "NULLIF(TRIM(payload:event_id::STRING), '') AS EVENT_ID",
-            "NULLIF(TRIM(payload:order_id::STRING), '') AS ORDER_ID",
-            "TRY_TO_DECIMAL(payload:version::STRING, 38, 9) AS VERSION",
-            "TRY_TO_TIMESTAMP_TZ(payload:event_time::STRING) AS EVENT_TIME",
-            "payload:status::STRING AS STATUS",
-            "TRY_TO_DECIMAL(payload:amount::STRING, 12, 2) AS AMOUNT",
-            "payload:region::STRING AS REGION",
-            "SOURCE_FILE", "SOURCE_ROW")
-        typed = typed.with_column("REJECT_REASON", sql_expr("""CASE
-            WHEN event_id IS NULL OR order_id IS NULL THEN 'MISSING_KEY'
-            WHEN version IS NULL OR version < 1 OR version <> TRUNC(version) THEN 'BAD_VERSION'
-            WHEN event_time IS NULL THEN 'BAD_TIME'
-            WHEN status IS NULL OR status NOT IN ('PLACED', 'PAID', 'CANCELLED') THEN 'BAD_STATUS'
-            WHEN amount IS NULL OR amount < 0 THEN 'BAD_AMOUNT'
-            WHEN region IS NULL OR region NOT IN ('US', 'EU') THEN 'BAD_REGION'
-            ELSE NULL END"""))
-
-        # STEP 3: a reference join and derived active amount enrich the same events.
-        ref = session.table("SILVER.REGION_REFERENCE")
-        enriched = typed.join(ref, typed["REGION"] == ref["REGION_CODE"], "left")
-        enriched = enriched.with_column("ACTIVE_AMOUNT_USD",
-            sql_expr("IFF(status = 'CANCELLED', 0, amount)"))
-        session.sql("DELETE FROM SILVER.SNOWPARK_EVENTS").collect()
-        enriched.select("EVENT_ID", "ORDER_ID", "VERSION", "EVENT_TIME", "STATUS",
-            "AMOUNT", "REGION", "REGION_LABEL", "ACTIVE_AMOUNT_USD", "REJECT_REASON",
-            "SOURCE_FILE", "SOURCE_ROW").write.insert_into("SILVER.SNOWPARK_EVENTS")
-
-        # STEP 4: check immutable-ID conflicts, then rank unique valid events.
-        # Only scalar checks return to Python; event rows are not collected.
         if session.table("SILVER.EVENT_CONFLICTS").count():
             raise ValueError("Conflicting payloads for immutable event_id")
-        good = enriched.filter(col("REJECT_REASON").is_null())
-        unique = good.with_column("RN", row_number().over(
-            Window.partition_by("EVENT_ID").order_by(col("SOURCE_FILE"), col("SOURCE_ROW"))))
-        unique = unique.filter(col("RN") == 1).drop("RN")
-        latest = unique.with_column("RN", row_number().over(
-            Window.partition_by("ORDER_ID").order_by(
-                col("VERSION").desc(), col("EVENT_TIME").desc(), col("EVENT_ID").desc())))
-        latest = latest.filter(col("RN") == 1).drop("RN")
-        session.sql("DELETE FROM SILVER.SNOWPARK_CANDIDATES").collect()
-        latest.select("ORDER_ID", "EVENT_ID", "VERSION", "EVENT_TIME", "STATUS", "AMOUNT",
-            "REGION").write.insert_into("SILVER.SNOWPARK_CANDIDATES")
 
-        # STEP 5: merge the same state using the same version/time/ID precedence.
-        session.sql("""MERGE INTO SILVER.ORDERS_CURRENT t
-            USING SILVER.SNOWPARK_CANDIDATES s ON t.order_id = s.order_id
-            WHEN MATCHED AND (
-                s.version > t.version
-                OR (s.version = t.version AND s.event_time > t.event_time)
-                OR (s.version = t.version AND s.event_time = t.event_time AND s.event_id > t.event_id))
-            THEN UPDATE SET event_id = s.event_id, version = s.version,
-                event_time = s.event_time, status = s.status, amount = s.amount, region = s.region
-            WHEN NOT MATCHED THEN INSERT
-                (order_id, event_id, version, event_time, status, amount, region)
-            VALUES (s.order_id, s.event_id, s.version, s.event_time, s.status, s.amount, s.region)""").collect()
+        typed = type_events(session.table("SILVER.EVENT_INBOX"))
+        classified = classify_events(typed)
+        enriched = enrich_events(classified, session.table("SILVER.REGION_REFERENCE"))
+        candidates = select_candidates(enriched)
+
+        session.table("SILVER.SNOWPARK_EVENTS").delete()
+        enriched.select(*EVENT_COLUMNS).write.insert_into("SILVER.SNOWPARK_EVENTS")
+        session.table("SILVER.SNOWPARK_CANDIDATES").delete()
+        candidates.write.insert_into("SILVER.SNOWPARK_CANDIDATES")
+        result = merge_current(session, session.table("SILVER.SNOWPARK_CANDIDATES"))
         session.sql("COMMIT").collect()
-        return "Applied with Snowpark"
+        return f"Applied with Snowpark: {result}"
     except Exception:
         session.sql("ROLLBACK").collect()
         raise
 $$;
 
+DESC PROCEDURE SILVER.APPLY_EVENTS_SNOWPARK();
+
+-- Inspect the resolved package dependency in the procedure description.
+
 CALL SILVER.APPLY_EVENTS_SNOWPARK();
 
-SELECT * FROM SILVER.SNOWPARK_CANDIDATES ORDER BY ORDER_ID;
+SELECT *
+FROM SILVER.SNOWPARK_CANDIDATES
+ORDER BY ORDER_ID;
 
-SELECT EVENT_ID, REJECT_REASON FROM SILVER.SNOWPARK_EVENTS WHERE REJECT_REASON IS NOT NULL;
+SELECT EVENT_ID, REJECT_REASON
+FROM SILVER.SNOWPARK_EVENTS
+WHERE REJECT_REASON IS NOT NULL;
 
 -- CHECKPOINT: candidates o1/e4/120, o2/e5/50 cancelled, o3/e8/45; one BAD_AMOUNT.
 
-SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION FROM SILVER.SNOWPARK_CANDIDATES
+SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION
+FROM SILVER.SNOWPARK_CANDIDATES
 MINUS
-SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION FROM SILVER.ORDERS_CURRENT;
+SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION
+FROM SILVER.ORDERS_CURRENT;
 
-SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION FROM SILVER.ORDERS_CURRENT
+SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION
+FROM SILVER.ORDERS_CURRENT
 MINUS
-SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION FROM SILVER.SNOWPARK_CANDIDATES;
+SELECT ORDER_ID, EVENT_ID, VERSION, EVENT_TIME, STATUS, AMOUNT, REGION
+FROM SILVER.SNOWPARK_CANDIDATES;
 
 -- CHECKPOINT: both differences are empty. Equality does not prove all contracts;
 -- inspect rejected rows and the source replay next.
 
 -- ──────────────────────────────────────────────────────────────────────────────
--- STEP 3 │ Deploy the transformation entry point without changing the task graph
+-- PART C: ORCHESTRATE - switch the existing task graph to the procedure
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- If 99-Stop was run earlier, this also restarts the child. Root stays suspended.
@@ -200,12 +245,15 @@ ALTER TASK OPS.APPLY_TASK MODIFY AS CALL ADV_ORDERS.SILVER.APPLY_EVENTS_SNOWPARK
 ALTER TASK OPS.AUDIT_TASK RESUME;
 
 -- Add one duplicate delivery in a distinct synthetic file lineage.
+-- The NOT EXISTS guard makes this replay step rerunnable without adding more rows.
 -- It intentionally bypasses file ingestion to isolate business replay behavior.
 
 INSERT INTO BRONZE.EVENTS_RAW
 SELECT PAYLOAD, 'snowpark/replay-e8', 1, CURRENT_TIMESTAMP()
 FROM BRONZE.EVENTS_RAW
 WHERE PAYLOAD:event_id::STRING = 'e8'
+  AND NOT EXISTS
+      (SELECT 1 FROM BRONZE.EVENTS_RAW WHERE SOURCE_FILE = 'snowpark/replay-e8')
 QUALIFY ROW_NUMBER() OVER (ORDER BY SOURCE_FILE, SOURCE_ROW) = 1;
 
 EXECUTE TASK OPS.APPLY_TASK;
@@ -218,12 +266,17 @@ ORDER BY SCHEDULED_TIME DESC;
 
 -- Do not proceed until both latest task executions are SUCCEEDED.
 
-SELECT COUNT(*) AS PENDING_ROWS FROM BRONZE.EVENTS_STREAM;
+SELECT COUNT(*) AS PENDING_ROWS
+FROM BRONZE.EVENTS_STREAM;
 
-SELECT * FROM GOLD.ORDER_METRICS;
+SELECT *
+FROM GOLD.ORDER_METRICS;
 
 -- CHECKPOINT after success: stream 0; raw/inbox 11; current 3; active value 165.
 -- Preserve cancellation and late-version protections. Repeating the handler
 -- changes neither current order state nor event counts when stream is empty.
 
 CALL SILVER.APPLY_EVENTS_SNOWPARK();
+
+-- Optional alternative: see Optional-NotebookPipeline.sql. Do not run two consumers
+-- of the same stream concurrently. Hosted notebook execution requires prevalidation.

@@ -94,7 +94,9 @@ STREAM_DEMO -> STREAM_DEMO_CHANGES -> STREAM_DEMO_SINK
 
 Part A states the expected data, shows expected/actual control totals and uses INTERSECT to display all matching rows: 3 current orders, 1 Gold row and 1 rejected event. Row-count controls must also pass, because INTERSECT alone does not expose extra actual rows. Part B is a separate helper demonstration; create its disposable tables and stream immediately before that demonstration, after acceptance. After rollback the demonstration stream still exposes its one inserted row and the sink has zero rows. No new business-processing stage is added. Run before Lab 06: acceptance expects raw/inbox=10.
 
-## Lab 06 - Snowpark implementation and deployment
+## Lab 06 - Snowpark development and deployment
+
+Development notebook: inspect typed/classified/enriched DataFrames -> validate latest candidates against SQL -> trial Snowpark writes/MERGE -> ROLLBACK -> assemble reusable handler -> deploy through the SQL script. The diagram below is the deployed processing path; the development notebook does not consume the stream.
 
 ```text
 EXISTING: EVENTS_STREAM -> EVENT_INBOX
@@ -117,7 +119,7 @@ REGION_REFERENCE -- join ------+
 APPLY_TASK -> APPLY_EVENTS_SNOWPARK -> AUDIT_TASK -> RUN_AUDIT
 ```
 
-Define reference, transformed-event and candidate tables before filling or processing them. Python executes inside Snowflake. Replace the task entry point, not the graph. One synthetic raw replay bypasses stage/Snowpipe intentionally to isolate business idempotency. Expected final raw/inbox=11, current=3, rejects=1, pending=0, active value=165. Compare SQL and Snowpark results before calling the deployment successful.
+Define reference, transformed-event and candidate tables before filling or processing them. Python executes inside Snowflake. Develop the transformations first in `06-Snowpark-Development.ipynb`, then deploy identical functions as APPLY_EVENTS_SNOWPARK and replace the task entry point. The unpinned Snowpark package resolves at procedure creation. The optional pipeline notebook is a separately gated alternative consumer, not part of this task graph. One synthetic raw replay bypasses stage/Snowpipe intentionally to isolate business idempotency. Expected final raw/inbox=11, current=3, rejects=1, pending=0, active value=165. Compare SQL and Snowpark results before calling the deployment successful.
 
 ## Table-first teaching sequence
 
