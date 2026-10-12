@@ -1,14 +1,19 @@
 /*----------------Snowflake Advanced 3-day class Lab:-------------------------------
 -- Copyright © 2026 Innovation In Software Corporation. All rights reserved.
+
 1) Load Bronze with source-file metadata
 2) Distinguish file replay from duplicate business events
 3) Queue a bounded Snowpipe load and inspect asynchronous completion
 ----------------------------------------------------------------------------------*/
 
 -- 02 | Internal stage -> Bronze, replay, Snowpipe
+
 USE ROLE ADV_LAB;
+
 USE WAREHOUSE ADV_WH;
+
 USE DATABASE ADV_ORDERS;
+
 USE SCHEMA BRONZE;
 
 -- ──────────────────────────────────────────────────────────────────────────────
@@ -39,6 +44,7 @@ CREATE TABLE IF NOT EXISTS EVENTS_RAW
 -- A SELECT inspects pending rows without advancing the offset.
 -- Committed DML using the stream consumes its changes; Lab 03 demonstrates
 -- transactional consumption into the durable Silver inbox.
+
 CREATE STREAM IF NOT EXISTS EVENTS_STREAM
     ON TABLE EVENTS_RAW
     APPEND_ONLY = TRUE;
@@ -49,6 +55,7 @@ FROM EVENTS_STREAM; -- 0 on a fresh first pass; reruns preserve the current offs
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 1: Inspect semi-structured records and file lineage before loading.
 -- ──────────────────────────────────────────────────────────────────────────────
+
 SELECT
     $1,
     METADATA$FILENAME,
@@ -68,10 +75,12 @@ FILE_FORMAT = EVENTS_JSON;
 
 SELECT COUNT(*) AS raw_rows
 FROM EVENTS_RAW; -- 4 on the first pass; 8 if batch2 was already loaded
+
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 2: Repeat the exact COPY above. Expect the existing raw count unchanged.
 -- ──────────────────────────────────────────────────────────────────────────────
 -- File-load history is NOT business-key deduplication: e2 still occurs twice.
+
 SELECT
     payload:event_id::STRING AS event_id,
     COUNT(*) AS copies
@@ -82,6 +91,7 @@ ORDER BY 1;
 -- ──────────────────────────────────────────────────────────────────────────────
 -- STEP 3: Define Snowpipe for the second batch only; do NOT bulk COPY batch2.
 -- ──────────────────────────────────────────────────────────────────────────────
+
 CREATE PIPE IF NOT EXISTS ORDERS_PIPE
     AUTO_INGEST = FALSE
 AS
@@ -96,8 +106,10 @@ FROM
 )
 FILE_FORMAT = ADV_ORDERS.BRONZE.EVENTS_JSON
 ON_ERROR = SKIP_FILE;
+
 -- This is a bounded recovery/backfill exercise, NOT continuous scheduling.
 -- REFRESH queues recently staged files (7-day limit); ingestion is asynchronous.
+
 ALTER PIPE ORDERS_PIPE REFRESH;
 
 -- HOW TO READ PIPE STATUS
@@ -111,10 +123,12 @@ ALTER PIPE ORDERS_PIPE REFRESH;
 -- PAUSED or STOPPED_/STALLED_ states need investigation if loading is expected.
 -- Read error / fault details when present; a recorded last error may be historical.
 -- Source: https://docs.snowflake.com/en/sql-reference/functions/system_pipe_status
+
 SELECT SYSTEM$PIPE_STATUS('ADV_ORDERS.BRONZE.ORDERS_PIPE');
 
 SELECT COUNT(*) AS raw_rows
 FROM EVENTS_RAW; -- eventually 8
+
 SELECT
     FILE_NAME,
     STATUS,
@@ -138,7 +152,9 @@ FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
 -- Stop here instead of claiming success. The documented fallback in the guide
 -- deliberately abandons this pipe branch before bulk loading batch2.
 -- Parseable JSON can still violate business rules (e3). Bronze preserves it.
+
 SELECT COUNT(*) AS pending_rows
 FROM EVENTS_STREAM; -- 8 before Lab 03 consumes them; 0 after its successful commit
+
 SELECT COUNT(*) AS pending_rows
 FROM EVENTS_STREAM; -- unchanged by the preceding SELECT
