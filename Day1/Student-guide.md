@@ -27,13 +27,13 @@ Part A first states the expected pipeline data. Compare expected and actual cont
 
 ## Lab 06 - develop Snowpark in a notebook, then deploy
 
-1. Run **Part A only** of `06-SnowparkAndDeployment.sql`: establish the three destinations and region reference.
-2. Import/open `06-Snowpark-Development.ipynb` in Snowflake. Follow its runtime, role, warehouse and package instructions; instructor and students execute the same cells.
-3. Inspect typed columns, rejection rules, reference join, event deduplication and latest-state windows. Show three matches with the SQL baseline, then try scratch-table writes and Snowpark MERGE in one transaction that always rolls back.
-4. Assemble the same functions into `main`, without calling it in the development notebook. Return to SQL **Part B** to create/call the Python 3.12 stored procedure. Snowpark is unpinned; deployment resolves an available package version at creation. Inspect the resolved dependency.
-5. Run SQL **Part C** to switch the existing task graph to this procedure. Wait for asynchronous task completion and verify raw/inbox=11, current=3 and active value=165. The replay INSERT is guarded for repeat execution.
+1. Import/open **06-Snowpark-Development.ipynb** in Snowflake. It is the single required Lab 06 file; use the same runtime, role, warehouse and package setup for every participant.
+2. Run its SQL setup section to establish the three destinations and region reference. Then develop the Python transformations cell by cell.
+3. Compare three candidates with the SQL baseline and run the reversible transaction trial. Assemble the handler from the verified functions.
+4. Continue in the same notebook: SQL cells create/call the Python 3.12 procedure and inspect its resolved package dependency. Snowpark is unpinned at creation.
+5. Switch the existing task graph using the notebook SQL cells. Pause for asynchronous completion, then verify raw/inbox=11, current=3 and active value=165. On rerun, the replay guard inserts nothing and an empty-stream task can be SKIPPED.
 
-`Snowpark-OrderTransform.py` is the complete reusable source; the deployment SQL embeds identical source. This is an alternative implementation of the established order contract, chosen to teach Snowpark APIs and the development-to-deployment workflow. SQL remains sufficient for this business example.
+`Snowpark-OrderTransform.py` remains the complete reusable source for reference; the notebook deployment cell embeds identical source. It is not a separate required execution step. The former SQL companion is retained only in Archive/Lab06-before-consolidation. SQL remains sufficient for this business example; this lab teaches Snowpark APIs and development-to-deployment workflow.
 
 Optional: `Snowpark-Pipeline.ipynb` omits development trials and invokes the handler once. `Optional-NotebookPipeline.sql` explains a separately gated notebook-task alternative. Do not enable two consumers of EVENTS_STREAM. Notebook import/runtime and headless execution must be rehearsed in the class account; handler tests do not certify notebook hosting. The optional task has no original audit child.
 

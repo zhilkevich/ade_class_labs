@@ -96,7 +96,7 @@ Part A states the expected data, shows expected/actual control totals and uses I
 
 ## Lab 06 - Snowpark development and deployment
 
-Development notebook: inspect typed/classified/enriched DataFrames -> validate latest candidates against SQL -> trial Snowpark writes/MERGE -> ROLLBACK -> assemble reusable handler -> deploy through the SQL script. The diagram below is the deployed processing path; the development notebook does not consume the stream.
+Development notebook: inspect typed/classified/enriched DataFrames -> validate latest candidates against SQL -> trial Snowpark writes/MERGE -> ROLLBACK -> assemble reusable handler -> deploy through SQL cells in the same notebook. The diagram below is the deployed processing path; the development trial does not consume the stream; the later deployed handler captures and commits stream data.
 
 ```text
 EXISTING: EVENTS_STREAM -> EVENT_INBOX
