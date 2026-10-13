@@ -50,3 +50,9 @@ Not tested: hosted notebook UI import/runtime, optional headless notebook task, 
   ]
 }
 ```
+
+## Instructor notebook adoption - 12 October 2026
+
+Retained the instructor 24-cell structure, SQL cell metadata, whitespace and df/df_* parameter naming. Applied equivalent formatting and parameter naming to deployment source. VERSION now intentionally uses NUMBER(3,1), a classroom simplification approved by the instructor. Numeric conversion can round additional fractional digits and rejects values outside this precision; full arbitrary-input validation is not claimed. Fresh scratch-table DDL uses this type; existing scratch tables are preserved by IF NOT EXISTS.
+
+Live isolated rehearsal in ADE_LAB6_STYLE_20261012_010951: Python development cells and rollback assertions passed; the assembled handler passed two calls; current orders=3, active value=165 and stream=0. Inputs were copied from the accepted 11-delivery inbox. The conflict view was an empty fixture: no new conflict-guard test is claimed. Hosted notebook UI import/execution and optional notebook task were not tested. Warehouse suspended afterwards.
